@@ -1,12 +1,9 @@
 import React from 'react';
-import { z, ZodType } from 'zod';
-// MiniSearch is now loaded via a script tag, so the direct import is removed.
 
-// --- TYPE DEFINITIONS (TypeScript) ---
+// --- TYPE DEFINITIONS ---
 type DomainId = 1 | 2 | 3 | 4 | 5 | 6;
 type Vendor = "openai" | "anthropic" | "gemini";
 
-// A type for the MiniSearch instance, which will be attached to the window object.
 interface MiniSearch<T = any> {
     new (options: any): MiniSearch<T>;
     addAll(documents: T[]): void;
@@ -45,48 +42,60 @@ interface ResultsState {
 interface JsonGenOptions {
   system?: string;
   user: string;
-  schema: ZodType<any>;
+  validator?: (data: any) => any;
   signal: AbortSignal;
 }
 
 interface ModelClient {
   generateJSON<T>(opts: JsonGenOptions): Promise<T>;
-  generateText(opts: Omit<JsonGenOptions, 'schema'>): Promise<string>;
+  generateText(opts: Omit<JsonGenOptions, 'validator'>): Promise<string>;
 }
 
-
-// --- ZOD SCHEMAS for API Response Validation ---
-const EvidenceCitationSchema = z.object({
-  page: z.number().int().optional(),
-  section: z.string().optional(),
-});
-
-const DomainItemSchema = z.object({
-  item: z.number().int(),
-  score_1to7: z.number().int().min(1).max(7),
-  confidence_0to100: z.number().int().min(0).max(100),
-  evidence_citations: z.array(EvidenceCitationSchema),
-  justification: z.string().max(300),
-});
-
-const DomainResultSchema = z.array(DomainItemSchema);
-
-const DigestSchema = z.object({
-    guideline_meta: z.object({}).passthrough(),
-    scope_purpose: z.object({}).passthrough(),
-    stakeholders: z.object({}).passthrough(),
-    rigour: z.object({}).passthrough(),
-    clarity: z.object({}).passthrough(),
-    applicability: z.object({}).passthrough(),
-    editorial_independence: z.object({}).passthrough(),
-});
-
-const OverallAssessmentSchema = z.object({
-  overall_quality_1to7: z.number().int().min(1).max(7),
-  recommend_use: z.enum(["yes", "yes_with_modifications", "no"]),
-  justification: z.string(),
-});
-
+// --- MANUAL VALIDATORS (replacing Zod) ---
+const validators = {
+  domainResult: (data: any): DomainItem[] => {
+    if (!Array.isArray(data)) throw new Error("Domain result must be an array");
+    return data.map((item, idx) => {
+      if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
+        throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
+      }
+      if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
+        throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
+      }
+      if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
+        throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
+      }
+      if (!Array.isArray(item.evidence_citations)) {
+        throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
+      }
+      if (typeof item.justification !== 'string' || item.justification.length > 300) {
+        throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
+      }
+      return item as DomainItem;
+    });
+  },
+  
+  digest: (data: any): Record<string, unknown> => {
+    if (typeof data !== 'object' || data === null) {
+      throw new Error("Digest must be an object");
+    }
+    // We're being permissive here since digest structure can vary
+    return data;
+  },
+  
+  overallAssessment: (data: any) => {
+    if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
+      throw new Error("'overall_quality_1to7' must be between 1 and 7");
+    }
+    if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
+      throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
+    }
+    if (typeof data.justification !== 'string') {
+      throw new Error("'justification' must be a string");
+    }
+    return data;
+  }
+};
 
 // --- PROMPT PACK DATA ---
 const AGREE_II_PROMPT_PACK = {
@@ -94,9 +103,9 @@ const AGREE_II_PROMPT_PACK = {
     "name": "AGREE II LLM Prompt Pack",
     "version": "v1.0",
     "created": "2025-08-12",
-    "notes": "Prompts and schemas to appraise guidelines with AGREE II using LLMs. Use for research/QA/education; not for commercial product marketing without permission from AGREE Enterprise.",
+    "notes": "Prompts and schemas to appraise guidelines with AGREE II using LLMs.",
     "source_manual": "AGREE II User's Manual & Instrument (2009; update 2017)",
-    "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes or product marketing."
+    "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes."
   },
   "recommended_model_settings": {
     "temperature": 0.1,
@@ -117,23 +126,6 @@ const AGREE_II_PROMPT_PACK = {
     ],
     "overall_assessment_prompt": "AGREE II — Overall Guideline Assessment\n\nUsing ONLY the information supplied for this guideline and the domain evaluations, answer the two AGREE II overall items. Be concise.\n\nDomain Results:\n{{DOMAIN_RESULTS}}\n\nReturn JSON:\n{\n  \"overall_quality_1to7\": <int>,       // 1 = lowest quality, 7 = highest quality\n  \"recommend_use\": \"<yes|yes_with_modifications|no>\",\n  \"justification\": \"<≤2 sentences referencing the most influential domains/items>\"\n}"
   }
-};
-
-// --- Helper Icons (using inline SVG for simplicity) ---
-const Icon = ({ path, className = "w-6 h-6" }: { path: string, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d={path} />
-    </svg>
-);
-const ICONS = {
-    upload: <Icon path="M9.99999 15.172L19.192 5.979L20.607 7.393L9.99999 18L3.63599 11.636L5.04999 10.222L9.99999 15.172Z" />,
-    fileText: <Icon path="M15 4H5V20H19V8H15V4ZM3 2.9918C3 2.44405 3.44749 2 3.9982 2H16L21 7V20.9925C21 21.5489 20.5519 22 20.0058 22H3.9942C3.44512 22 3 21.555 3 21.0082V2.9918ZM7 10H17V12H7V10ZM7 14H17V16H7V14Z" />,
-    play: <Icon path="M8 5V19L19 12L8 5Z" />,
-    checkCircle: <Icon path="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" />,
-    download: <Icon path="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 21.1 21.1 22 20 22H4C2.9 22 2 21.1 2 20V12H4V19Z" />,
-    alertCircle: <Icon path="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" />,
-    clock: <Icon path="M12 2C6.486 2 2 6.486 2 12C2 17.514 6.486 22 12 22C17.514 22 22 17.514 22 12C22 6.486 17.514 2 12 2ZM12 20C7.589 20 4 16.411 4 12C4 7.589 7.589 4 12 4C16.411 4 20 7.589 20 12C20 16.411 16.411 20 12 20ZM13 7H11V12H16V14H11V7Z" className="animate-spin" />,
-    brain: <Icon path="M12 2C9.25 2 7 4.25 7 7C7 8.85 8.1 10.45 9.65 11.25C8.85 11.45 8.1 11.8 7.45 12.25C6.45 12.9 6 13.9 6 15V16H18V15C18 13.9 17.55 12.9 16.55 12.25C15.9 11.8 15.15 11.45 14.35 11.25C15.9 10.45 17 8.85 17 7C17 4.25 14.75 2 12 2ZM12 4C13.65 4 15 5.35 15 7C15 8.65 13.65 10 12 10C10.35 10 9 8.65 9 7C9 5.35 10.35 4 12 4ZM4 18C4 18.9 4.35 19.7 4.9 20.3L6.35 18.85C6.15 18.6 6 18.3 6 18H4ZM20 18C20 18.3 19.85 18.6 19.65 18.85L21.1 20.3C21.65 19.7 22 18.9 22 18H20ZM8.5 13.5C9.35 13.2 10.25 13 11.25 13H12.75C13.75 13 14.65 13.2 15.5 13.5C16.35 13.8 16.85 14.35 16.85 15H7.15C7.15 14.35 7.65 13.8 8.5 13.5ZM8 20.85L9.45 19.4C9.8 19.75 10.25 20.05 10.75 20.25V22H13.25V20.25C13.75 20.05 14.2 19.75 14.55 19.4L16 20.85L15.3 21.55C14.3 22.25 13.1 22.65 11.75 22.65C10.4 22.65 9.2 22.25 8.2 21.55L7.5 20.85L8 20.85Z" />
 };
 
 // --- UTILITY FUNCTIONS ---
@@ -176,115 +168,30 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
     return results;
 }
 
-
-// ---------- Types ----------
-export type Vendor = "gemini" | "openai" | "anthropic";
-
-export interface JsonGenOptions<T = any> {
-  user: string;
-  system?: string;
-  schema: ZodType<T>;
-  signal: AbortSignal;
-}
-
-export interface ModelClient {
-  generateJSON: <T>(opts: JsonGenOptions<T>) => Promise<T>;
-  generateText: (opts: Omit<JsonGenOptions, "schema">) => Promise<string>;
-}
-
-// ---------- Small utilities ----------
-const isOpenAIReasoningModel = (model: string) =>
-  /^gpt-5\b|^o[0-9]/i.test(model); // extend if you add more reasoning SKUs
-
-const compact = <T extends Record<string, any>>(obj: T): T =>
-  Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
-  ) as T;
-
-async function withRetries<T>(
-  fn: () => Promise<T>,
-  attempts = 3,
-  baseDelayMs = 300
-): Promise<T> {
-  let lastErr: any;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      lastErr = e;
-      if (i === attempts - 1) break;
-      const jitter = Math.floor(Math.random() * baseDelayMs);
-      await new Promise((r) => setTimeout(r, baseDelayMs * (i + 1) + jitter));
-    }
-  }
-  throw lastErr;
-}
-
-// ---------- Core helpers ----------
-function safeParseJson<T>(text: string, schema: ZodType<T>): T {
-  try {
-    const match = text.match(/```json([\s\S]*?)```/i);
-    const jsonString = match ? match[1].trim() : text.trim();
-    const parsedData = JSON.parse(jsonString);
-    const validationResult = schema.safeParse(parsedData);
-    if (!validationResult.success) {
-      const flatError = validationResult.error.flatten();
-      const errorMessages = Object.entries(flatError.fieldErrors)
-        .map(
-          ([field, messages]) => `${field}: ${(messages as string[]).join(", ")}`
-        )
-        .join("; ");
-      throw new Error(`Schema validation failed: ${errorMessages}`);
-    }
-    return validationResult.data;
-  } catch (e: any) {
-    throw new Error(
-      `Failed to parse and validate JSON. Reason: ${e.message}`
-    );
-  }
-}
-
-async function performFetch(
-  url: string,
-  body: object,
-  headers: Record<string, string>,
-  signal: AbortSignal
-) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal,
-  } as RequestInit);
-
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`API request failed: ${response.status} - ${errBody}`);
-  }
-  return response.json();
-}
-
-// ---------- Client factory ----------
-export function getClient(vendor: Vendor, apiKey: string): ModelClient {
+// --- MODEL CLIENT FACTORY ---
+function getClient(vendor: Vendor, apiKey: string): ModelClient {
   const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
 
-  // --- Hard sanitizer for OpenAI payloads ---
-  function sanitizeOpenAI(body: any, { allowSampling = false }: { allowSampling?: boolean } = {}) {
-    // By default, never send sampling params to OpenAI (prevents 400s on reasoning models)
-    if (!allowSampling) {
-      delete body.temperature;
-      delete body.top_p;
-      delete body.logprobs;
-      delete body.frequency_penalty;
-      delete body.presence_penalty;
-      delete body.response_format; // reasoning models reject this too
-    }
-    return body;
-  }
+  const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
 
-  const generate = async (
-    opts: JsonGenOptions & { isJsonMode: boolean }
-  ): Promise<any> => {
+  const safeParseJson = <T>(text: string, validator?: (data: any) => T): T => {
+    try {
+      // Try to extract JSON from markdown code blocks
+      const match = text.match(/```json([\s\S]*?)```/i);
+      const jsonString = match ? match[1].trim() : text.trim();
+      const parsedData = JSON.parse(jsonString);
+      
+      // If we have a validator, use it
+      if (validator) {
+        return validator(parsedData);
+      }
+      return parsedData as T;
+    } catch (e: any) {
+      throw new Error(`Failed to parse and validate JSON: ${e.message}`);
+    }
+  };
+
+  const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
     return withRetries(async () => {
       let apiUrl = "";
       let requestBody: any = {};
@@ -296,12 +203,11 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
           headers = { "Content-Type": "application/json" };
           requestBody = {
             contents: [{ role: "user", parts: [{ text: opts.user }] }],
-            generationConfig: compact({
-              // Safe to keep for Gemini
+            generationConfig: {
               temperature,
               topP: top_p,
               responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
-            }),
+            },
             ...(opts.system && {
               systemInstruction: { parts: [{ text: opts.system }] },
             }),
@@ -316,8 +222,7 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             Authorization: `Bearer ${apiKey}`,
           };
 
-          // You can make this configurable; default is a reasoning model
-          const model = "gpt-5-2025-08-07";
+          const model = "gpt-5-2025-08-07"; // Using a non-reasoning model as fallback
           const isReasoning = isOpenAIReasoningModel(model);
 
           const messages = [
@@ -325,18 +230,15 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             { role: "user", content: opts.user },
           ];
 
-          // Build payload based on model type
           if (isReasoning) {
-            // Reasoning models: only specific parameters allowed
+            // Reasoning models: NO temperature, top_p, or response_format
             requestBody = {
               model,
               messages,
-              reasoning: { effort: "medium" as const },
-              max_completion_tokens: 800,
-              // DO NOT include temperature, top_p, response_format, etc.
+              max_completion_tokens: 8000,
             };
           } else {
-            // Non-reasoning models: can use sampling parameters
+            // Non-reasoning models can use parameters
             requestBody = {
               model,
               messages,
@@ -345,9 +247,6 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
               ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
             };
           }
-
-          // Final sanitization (this should be redundant now, but keeping as safety net)
-          requestBody = sanitizeOpenAI(requestBody, { allowSampling: !isReasoning });
           break;
         }
 
@@ -358,20 +257,83 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             "x-api-key": apiKey,
             "anthropic-version": "2025-05-14",
           };
-          requestBody = compact({
+          requestBody = {
             model: "claude-sonnet-4-20250514",
             system: opts.system,
             messages: [{ role: "user", content: opts.user }],
             max_tokens: 4096,
-            // Anthropic supports these; safe to keep
             temperature,
             top_p,
-          });
+          };
           break;
         }
 
+        default:
+          throw new Error(`Unsupported vendor: ${vendor}`);
+      }
 
-// --- Main App Component ---
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: opts.signal,
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`API request failed: ${response.status} - ${errBody}`);
+      }
+
+      const data = await response.json();
+
+      // Extract text from response
+      let text = "";
+      switch (vendor) {
+        case "gemini":
+          text = data.candidates[0].content.parts[0].text;
+          break;
+        case "openai":
+          text = data.choices[0].message.content;
+          break;
+        case "anthropic":
+          text = data.content[0].text;
+          break;
+      }
+
+      return text;
+    });
+  };
+
+  return {
+    generateJSON: async <T>(opts: JsonGenOptions): Promise<T> => {
+      const text = await generate({ ...opts, isJsonMode: true });
+      return safeParseJson(text, opts.validator);
+    },
+    generateText: async (opts: Omit<JsonGenOptions, 'validator'>): Promise<string> => {
+      return generate({ ...opts, isJsonMode: false } as any);
+    },
+  };
+}
+
+// --- ICONS ---
+const Icon = ({ path, className = "w-6 h-6" }: { path: string, className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d={path} />
+    </svg>
+);
+
+const ICONS = {
+    upload: <Icon path="M9.99999 15.172L19.192 5.979L20.607 7.393L9.99999 18L3.63599 11.636L5.04999 10.222L9.99999 15.172Z" />,
+    fileText: <Icon path="M15 4H5V20H19V8H15V4ZM3 2.9918C3 2.44405 3.44749 2 3.9982 2H16L21 7V20.9925C21 21.5489 20.5519 22 20.0058 22H3.9942C3.44512 22 3 21.555 3 21.0082V2.9918ZM7 10H17V12H7V10ZM7 14H17V16H7V14Z" />,
+    play: <Icon path="M8 5V19L19 12L8 5Z" />,
+    checkCircle: <Icon path="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" />,
+    download: <Icon path="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 21.1 21.1 22 20 22H4C2.9 22 2 21.1 2 20V12H4V19Z" />,
+    alertCircle: <Icon path="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" />,
+    clock: <Icon path="M12 2C6.486 2 2 6.486 2 12C2 17.514 6.486 22 12 22C17.514 22 22 17.514 22 12C22 6.486 17.514 2 12 2ZM12 20C7.589 20 4 16.411 4 12C4 7.589 7.589 4 12 4C16.411 4 20 7.589 20 12C20 16.411 16.411 20 12 20ZM13 7H11V12H16V14H11V7Z" className="animate-spin" />,
+    brain: <Icon path="M12 2C9.25 2 7 4.25 7 7C7 8.85 8.1 10.45 9.65 11.25C8.85 11.45 8.1 11.8 7.45 12.25C6.45 12.9 6 13.9 6 15V16H18V15C18 13.9 17.55 12.9 16.55 12.25C15.9 11.8 15.15 11.45 14.35 11.25C15.9 10.45 17 8.85 17 7C17 4.25 14.75 2 12 2ZM12 4C13.65 4 15 5.35 15 7C15 8.65 13.65 10 12 10C10.35 10 9 8.65 9 7C9 5.35 10.35 4 12 4Z" />
+};
+
+// --- MAIN COMPONENT ---
 const AgreeIIWorkflow: React.FC = () => {
     const [file, setFile] = React.useState<File | null>(null);
     const [guidelinePages, setGuidelinePages] = React.useState<{ id: number; page: number; text: string }[]>([]);
@@ -385,6 +347,18 @@ const AgreeIIWorkflow: React.FC = () => {
     const [isPdfJsReady, setIsPdfJsReady] = React.useState<boolean>(false);
     const [isMiniSearchReady, setIsMiniSearchReady] = React.useState<boolean>(false);
     const [abortController, setAbortController] = React.useState<AbortController | null>(null);
+    const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini');
+    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({
+        gemini: '', openai: '', anthropic: ''
+    });
+
+    const steps = [
+        { name: 'Upload Guideline', icon: ICONS.upload },
+        { name: 'Generate Digest', icon: ICONS.fileText },
+        { name: 'Evaluate Domains', icon: ICONS.play },
+        { name: 'Overall Assessment', icon: ICONS.checkCircle },
+        { name: 'Download Results', icon: ICONS.download }
+    ];
 
     React.useEffect(() => {
         // Load pdf.js
@@ -422,19 +396,6 @@ const AgreeIIWorkflow: React.FC = () => {
             document.head.removeChild(miniSearchScript);
         };
     }, []);
-
-    const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini');
-    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({
-        gemini: '', openai: '', anthropic: ''
-    });
-
-    const steps = [
-        { name: 'Upload Guideline', icon: ICONS.upload },
-        { name: 'Generate Digest', icon: ICONS.fileText },
-        { name: 'Evaluate Domains', icon: ICONS.play },
-        { name: 'Overall Assessment', icon: ICONS.checkCircle },
-        { name: 'Download Results', icon: ICONS.download }
-    ];
 
     async function extractPdfPages(file: File): Promise<{ id: number; page: number; text: string }[]> {
         const pdfjsLib = (window as any).pdfjsLib;
@@ -516,10 +477,10 @@ const AgreeIIWorkflow: React.FC = () => {
         setProcessingStatus('Generating structured digest...');
         const client = getClient(selectedLlm, apiKeys[selectedLlm]);
         const fullText = guidelinePages.map(p => `[Page ${p.page}]\n${p.text}`).join('\n\n');
-        const digest = await client.generateJSON<z.infer<typeof DigestSchema>>({
+        const digest = await client.generateJSON({
             user: `${AGREE_II_PROMPT_PACK.prompts.digest_prompt}\n\nGuideline text:\n${fullText.substring(0, 150000)}`,
             system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
-            schema: DigestSchema,
+            validator: validators.digest,
             signal,
         });
         setResults(prev => ({ ...prev, digest }));
@@ -556,10 +517,10 @@ const AgreeIIWorkflow: React.FC = () => {
                 .replace('<DIGEST>{...domain-relevant fields only...}</DIGEST>', `<DIGEST>${JSON.stringify(digestSlice, null, 2)}</DIGEST>`)
                 .replace('<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>', `<EVIDENCE>${JSON.stringify(evidenceSnippets, null, 2)}</EVIDENCE>`);
 
-            const domainResults = await client.generateJSON<z.infer<typeof DomainResultSchema>>({
+            const domainResults = await client.generateJSON({
                 user: domainPrompt,
                 system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
-                schema: DomainResultSchema,
+                validator: validators.domainResult,
                 signal,
             });
 
@@ -585,10 +546,10 @@ const AgreeIIWorkflow: React.FC = () => {
         const overallPrompt = AGREE_II_PROMPT_PACK.prompts.overall_assessment_prompt
             .replace('{{DOMAIN_RESULTS}}', JSON.stringify(results.domains, null, 2));
 
-        const overallAssessment = await client.generateJSON<z.infer<typeof OverallAssessmentSchema>>({
+        const overallAssessment = await client.generateJSON({
             user: overallPrompt,
             system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
-            schema: OverallAssessmentSchema,
+            validator: validators.overallAssessment,
             signal,
         });
         setResults(prev => ({ ...prev, overall: overallAssessment }));
@@ -635,7 +596,7 @@ const AgreeIIWorkflow: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-4">Choose the LLM to perform the assessment. Ensure you provide the corresponding API key.</p>
                 <select value={selectedLlm} onChange={(e) => setSelectedLlm(e.target.value as Vendor)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="gemini">Google Gemini 2.5 Flash</option>
-                    <option value="openai">OpenAI GPT-5</option>
+                    <option value="openai">OpenAI GPT-5 </option>
                     <option value="anthropic">Anthropic Claude Sonnet 4</option>
                 </select>
             </div>
@@ -677,9 +638,10 @@ const AgreeIIWorkflow: React.FC = () => {
                         <div className="mb-4 p-4 bg-gray-100 rounded-md">
                             <p className="text-sm text-gray-800">Document loaded with {guidelinePages.length} pages and {totalChars.toLocaleString()} characters.</p>
                         </div>
-                        <button onClick={generateDigest} disabled={isProcessing} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 flex items-center">
+                        <button onClick={generateDigest} disabled={isProcessing || !apiKeys[selectedLlm]} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 flex items-center">
                             {isProcessing ? ICONS.clock : ICONS.fileText} <span className="ml-2">{isProcessing ? 'Generating...' : 'Generate Digest'}</span>
                         </button>
+                        {!apiKeys[selectedLlm] && <p className="text-sm text-red-600 mt-2">Please provide an API key for {selectedLlm}</p>}
                     </div>
                 );
             case 2:
