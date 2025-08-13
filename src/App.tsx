@@ -268,6 +268,20 @@ async function performFetch(
 export function getClient(vendor: Vendor, apiKey: string): ModelClient {
   const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
 
+  // --- Hard sanitizer for OpenAI payloads ---
+  function sanitizeOpenAI(body: any, { allowSampling = false }: { allowSampling?: boolean } = {}) {
+    // By default, never send sampling params to OpenAI (prevents 400s on reasoning models)
+    if (!allowSampling) {
+      delete body.temperature;
+      delete body.top_p;
+      delete body.logprobs;
+      delete body.frequency_penalty;
+      delete body.presence_penalty;
+      delete body.response_format; // reasoning models reject this too
+    }
+    return body;
+  }
+
   const generate = async (
     opts: JsonGenOptions & { isJsonMode: boolean }
   ): Promise<any> => {
@@ -283,6 +297,7 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
           requestBody = {
             contents: [{ role: "user", parts: [{ text: opts.user }] }],
             generationConfig: compact({
+              // Safe to keep for Gemini
               temperature,
               topP: top_p,
               responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
@@ -301,7 +316,8 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             Authorization: `Bearer ${apiKey}`,
           };
 
-          const model = "gpt-5-2025-08-07"; // reasoning model
+          // You can make this configurable; default is a reasoning model
+          const model = "gpt-5-2025-08-07";
           const isReasoning = isOpenAIReasoningModel(model);
 
           const messages = [
@@ -309,25 +325,24 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             { role: "user", content: opts.user },
           ];
 
-          if (isReasoning) {
-            // 🚫 Do not include temperature or top_p here at all
-            requestBody = {
-              model,
-              messages,
-              reasoning: { effort: "medium" as const },
-              max_completion_tokens: 800,
-            };
-          } else {
-            requestBody = compact({
-              model,
-              messages,
-              temperature,
-              top_p,
-              response_format: opts.isJsonMode
-                ? { type: "json_object" }
-                : { type: "text" },
-            });
-          }
+          // Build a minimal payload first
+          requestBody = {
+            model,
+            messages,
+            ...(isReasoning
+              ? { reasoning: { effort: "medium" as const }, max_completion_tokens: 800 }
+              : {
+                  // If you truly need sampling on non-reasoning models later,
+                  // flip allowSampling below to true.
+                  // temperature,
+                  // top_p,
+                  ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
+                }),
+          };
+
+          // 🔒 Final line of defense: strip unsupported fields
+          // Set allowSampling=false to *always* remove temperature/top_p/response_format.
+          requestBody = sanitizeOpenAI(requestBody, { allowSampling: false });
           break;
         }
 
@@ -336,13 +351,14 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
           headers = {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
+            "anthropic-version": "2025-05-14",
           };
           requestBody = compact({
             model: "claude-sonnet-4-20250514",
             system: opts.system,
             messages: [{ role: "user", content: opts.user }],
             max_tokens: 4096,
+            // Anthropic supports these; safe to keep
             temperature,
             top_p,
           });
@@ -352,6 +368,9 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
         default:
           throw new Error(`Unknown vendor: ${vendor}`);
       }
+
+      // (Optional) Debug aid during dev:
+      // console.debug("REQ:", vendor, JSON.stringify(requestBody, null, 2));
 
       const data = await performFetch(apiUrl, requestBody, headers, opts.signal);
 
