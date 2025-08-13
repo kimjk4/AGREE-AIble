@@ -549,11 +549,12 @@ const AgreeIIWorkflow: React.FC = () => {
                 .replace('<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>', `<EVIDENCE>${JSON.stringify(evidenceSnippets, null, 2)}</EVIDENCE>`);
 
             const domainResults = await client.generateJSON({
-                user: domainPrompt,
-                system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
-                validator: validators.domainResult,
-                signal,
-            });
+            user: domainPrompt,
+            system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
+            validator: validators.domainResult, // This calls your new manual validator
+            signal,
+        });
+
 
             if (signal.aborted) throw new Error('Aborted');
             setResults(prev => ({
