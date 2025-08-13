@@ -57,13 +57,11 @@ const validators = {
     domainResult: (data: any): DomainItem[] => {
         let itemsToProcess: any[] = [];
 
-        // FIX: Handle cases where the LLM returns a single object instead of an array.
+        // Handle cases where the LLM returns a single object instead of an array.
         if (typeof data === 'object' && !Array.isArray(data) && data !== null) {
-            // Case 1: The object itself is the item that should have been in an array.
             if ('item' in data && 'score_1to7' in data) {
                 itemsToProcess = [data];
             } else {
-                // Case 2: The array is nested under a key in the returned object.
                 const potentialArray = Object.values(data).find(value => Array.isArray(value));
                 if (potentialArray) {
                     itemsToProcess = potentialArray as any[];
@@ -87,12 +85,15 @@ const validators = {
             if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
                 throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
             }
-            if (item.justification === null) {
+            
+            // FIX: Coalesce non-string types and truncate long strings to prevent validation errors.
+            if (typeof item.justification !== 'string') {
                 item.justification = "";
             }
-            if (typeof item.justification !== 'string' || item.justification.length > 300) {
-                throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
+            if (item.justification.length > 300) {
+                item.justification = item.justification.substring(0, 297) + "...";
             }
+
             if (!Array.isArray(item.evidence_citations)) {
                 throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
             }
@@ -123,11 +124,8 @@ const validators = {
         if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
             throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
         }
-        if (data.justification === null) {
-            data.justification = "";
-        }
         if (typeof data.justification !== 'string') {
-            throw new Error("'justification' must be a string");
+            data.justification = "";
         }
         return data;
     }
