@@ -62,18 +62,38 @@ const validators = {
       if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
         throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
       }
-      if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
-        throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
-      }
-      if (!Array.isArray(item.evidence_citations)) {
-        throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
-      }
-      if (typeof item.justification !== 'string' || item.justification.length > 300) {
-        throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
-      }
-      return item as DomainItem;
+        // 1. Coalesce null justification to an empty string before validation.
+        if (item.justification === null) {
+            item.justification = "";
+        }
+        if (typeof item.justification !== 'string' || item.justification.length > 300) {
+            throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
+        }
+
+        if (!Array.isArray(item.evidence_citations)) {
+            throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
+        }
+        
+        // 2. Add validation for the contents of the evidence_citations array.
+        item.evidence_citations.forEach((citation: any, cIdx: number) => {
+            // Coalesce null section to an empty string.
+            if (citation.section === null) {
+                citation.section = "";
+            }
+            if (citation.page !== undefined && typeof citation.page !== 'number') {
+                throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
+            }
+            if (citation.section !== undefined && typeof citation.section !== 'string') {
+                throw new Error(`Item ${idx}, Citation ${cIdx}: 'section' must be a string`);
+            }
+        });
+
+        // --- FIX ENDS HERE ---
+
+        return item as DomainItem;
     });
-  },
+},
+
   
   digest: (data: any): Record<string, unknown> => {
     if (typeof data !== 'object' || data === null) {
@@ -235,6 +255,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
             requestBody = {
               model,
               messages,
+                temperature: 1,
               max_completion_tokens: 8000,
             };
           } else {
