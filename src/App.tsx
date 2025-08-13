@@ -56,12 +56,16 @@ const validators = {
   domainResult: (data: any): DomainItem[] => {
     if (!Array.isArray(data)) throw new Error("Domain result must be an array");
     return data.map((item, idx) => {
-      if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
-        throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
-      }
-      if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
-        throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
-      }
+        if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
+            throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
+        }
+        if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
+            throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
+        }
+        // YOU ARE MISSING THIS CHECK:
+        if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
+            throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
+        }
         // 1. Coalesce null justification to an empty string before validation.
         if (item.justification === null) {
             item.justification = "";
