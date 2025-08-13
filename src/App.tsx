@@ -265,7 +265,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
             requestBody = {
               model,
               messages,
-                temperature=1,
+                temperature: 1,
               max_completion_tokens: 8000,
             };
           } else {
