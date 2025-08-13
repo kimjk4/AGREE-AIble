@@ -53,78 +53,74 @@ interface ModelClient {
 
 // --- MANUAL VALIDATORS (replacing Zod) ---
 const validators = {
-  domainResult: (data: any): DomainItem[] => {
-    if (!Array.isArray(data)) throw new Error("Domain result must be an array");
-    return data.map((item, idx) => {
-        if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
-            throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
-        }
-        if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
-            throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
-        }
-        // YOU ARE MISSING THIS CHECK:
-        if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
-            throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
-        }
-        // 1. Coalesce null justification to an empty string before validation.
-        if (item.justification === null) {
-            item.justification = "";
-        }
-        if (typeof item.justification !== 'string' || item.justification.length > 300) {
-            throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
-        }
+  domainResult: (data: any): DomainItem[] => {
+    if (!Array.isArray(data)) throw new Error("Domain result must be an array");
+    return data.map((item, idx) => {
+        if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
+            throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
+        }
+        if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
+            throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
+        }
+      // FIX: Added missing confidence check.
+        if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
+            throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
+        }
+      // FIX: Coalesce null justification to an empty string.
+        if (item.justification === null) {
+            item.justification = "";
+        }
+        if (typeof item.justification !== 'string' || item.justification.length > 300) {
+            throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
+        }
 
-        if (!Array.isArray(item.evidence_citations)) {
-            throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
-        }
-        
-        // 2. Add validation for the contents of the evidence_citations array.
-        item.evidence_citations.forEach((citation: any, cIdx: number) => {
-            // Coalesce null section to an empty string.
-            if (citation.section === null) {
-                citation.section = "";
-            }
-            if (citation.page !== undefined && typeof citation.page !== 'number') {
-                throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
-            }
-            if (citation.section !== undefined && typeof citation.section !== 'string') {
-                throw new Error(`Item ${idx}, Citation ${cIdx}: 'section' must be a string`);
-            }
-        });
+        if (!Array.isArray(item.evidence_citations)) {
+            throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
+        }
+        
+      // FIX: Added validation for evidence_citations contents.
+        item.evidence_citations.forEach((citation: any, cIdx: number) => {
+          // Coalesce null section to an empty string.
+            if (citation.section === null) {
+                citation.section = "";
+            }
+            if (citation.page !== undefined && typeof citation.page !== 'number') {
+                throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
+            }
+            if (citation.section !== undefined && typeof citation.section !== 'string') {
+                throw new Error(`Item ${idx}, Citation ${cIdx}: 'section' must be a string`);
+            }
+        });
 
-        // --- FIX ENDS HERE ---
+        return item as DomainItem;
+    });
+ },
 
-        return item as DomainItem;
-    });
-},
+  digest: (data: any): Record<string, unknown> => {
+    if (typeof data !== 'object' || data === null) {
+      throw new Error("Digest must be an object");
+    }
+    // We're being permissive here since digest structure can vary
+    return data;
+  },
+  
+  overallAssessment: (data: any) => {
+    if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
+        throw new Error("'overall_quality_1to7' must be between 1 and 7");
+    }
+    if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
+        throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
+    }
 
-  
-  digest: (data: any): Record<string, unknown> => {
-    if (typeof data !== 'object' || data === null) {
-      throw new Error("Digest must be an object");
-    }
-    // We're being permissive here since digest structure can vary
-    return data;
-  },
-  
-  overallAssessment: (data: any) => {
-    if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
-        throw new Error("'overall_quality_1to7' must be between 1 and 7");
-    }
-    if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
-        throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
-    }
-
-    // Fix: Coalesce a null justification to an empty string before validation.
-    if (data.justification === null) {
-        data.justification = "";
-    }
-    if (typeof data.justification !== 'string') {
-        throw new Error("'justification' must be a string");
-    }
-    return data;
-}
-
+    // FIX: Coalesce a null justification to an empty string.
+    if (data.justification === null) {
+        data.justification = "";
+    }
+    if (typeof data.justification !== 'string') {
+        throw new Error("'justification' must be a string");
+    }
+    return data;
+ }
 };
 
 // --- PROMPT PACK DATA ---
@@ -200,28 +196,28 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
 
 // --- MODEL CLIENT FACTORY ---
 function getClient(vendor: Vendor, apiKey: string): ModelClient {
-  const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
+  const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
 
-  const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
+  const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
 
-  const safeParseJson = <T>(text: string, validator?: (data: any) => T): T => {
-    try {
-      // Try to extract JSON from markdown code blocks
-      const match = text.match(/```json([\s\S]*?)```/i);
-      const jsonString = match ? match[1].trim() : text.trim();
-      const parsedData = JSON.parse(jsonString);
-      
-      // If we have a validator, use it
-      if (validator) {
-        return validator(parsedData);
-      }
-      return parsedData as T;
-    } catch (e: any) {
-      throw new Error(`Failed to parse and validate JSON: ${e.message}`);
-    }
-  };
+  const safeParseJson = <T,>(text: string, validator?: (data: any) => T): T => {
+    try {
+      // Try to extract JSON from markdown code blocks
+      const match = text.match(/```json([\s\S]*?)```/i);
+      const jsonString = match ? match[1].trim() : text.trim();
+      const parsedData = JSON.parse(jsonString);
+      
+      // If we have a validator, use it
+      if (validator) {
+        return validator(parsedData);
+      }
+      return parsedData as T;
+    } catch (e: any) {
+      throw new Error(`Failed to parse and validate JSON: ${e.message}`);
+    }
+  };
 
-  const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
+  const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
     return withRetries(async () => {
       let apiUrl = "";
       let requestBody: any = {};
