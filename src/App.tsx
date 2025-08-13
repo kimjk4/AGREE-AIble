@@ -325,24 +325,29 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             { role: "user", content: opts.user },
           ];
 
-          // Build a minimal payload first
-          requestBody = {
-            model,
-            messages,
-            ...(isReasoning
-              ? { reasoning: { effort: "medium" as const }, max_completion_tokens: 800 }
-              : {
-                  // If you truly need sampling on non-reasoning models later,
-                  // flip allowSampling below to true.
-                  // temperature,
-                  // top_p,
-                  ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
-                }),
-          };
+          // Build payload based on model type
+          if (isReasoning) {
+            // Reasoning models: only specific parameters allowed
+            requestBody = {
+              model,
+              messages,
+              reasoning: { effort: "medium" as const },
+              max_completion_tokens: 800,
+              // DO NOT include temperature, top_p, response_format, etc.
+            };
+          } else {
+            // Non-reasoning models: can use sampling parameters
+            requestBody = {
+              model,
+              messages,
+              temperature,
+              top_p,
+              ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
+            };
+          }
 
-          // 🔒 Final line of defense: strip unsupported fields
-          // Set allowSampling=false to *always* remove temperature/top_p/response_format.
-          requestBody = sanitizeOpenAI(requestBody, { allowSampling: false });
+          // Final sanitization (this should be redundant now, but keeping as safety net)
+          requestBody = sanitizeOpenAI(requestBody, { allowSampling: !isReasoning });
           break;
         }
 
@@ -364,43 +369,6 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
           });
           break;
         }
-
-        default:
-          throw new Error(`Unknown vendor: ${vendor}`);
-      }
-
-      // (Optional) Debug aid during dev:
-      // console.debug("REQ:", vendor, JSON.stringify(requestBody, null, 2));
-
-      const data = await performFetch(apiUrl, requestBody, headers, opts.signal);
-
-      let responseText = "";
-      switch (vendor) {
-        case "gemini":
-          responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          break;
-        case "openai":
-          responseText = data?.choices?.[0]?.message?.content ?? "";
-          break;
-        case "anthropic":
-          responseText = data?.content?.[0]?.text ?? "";
-          break;
-      }
-
-      return opts.isJsonMode
-        ? safeParseJson(responseText, opts.schema)
-        : responseText;
-    });
-  };
-
-  return {
-    generateJSON: <T,>(opts: JsonGenOptions<T>): Promise<T> =>
-      generate({ ...opts, isJsonMode: true }),
-    generateText: (opts: Omit<JsonGenOptions, "schema">): Promise<string> =>
-      generate({ ...opts, schema: z.any(), isJsonMode: false }),
-  };
-}
-
 
 
 // --- Main App Component ---
