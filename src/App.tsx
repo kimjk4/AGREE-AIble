@@ -105,16 +105,22 @@ const validators = {
   
   overallAssessment: (data: any) => {
     if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
-      throw new Error("'overall_quality_1to7' must be between 1 and 7");
+        throw new Error("'overall_quality_1to7' must be between 1 and 7");
     }
     if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
-      throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
+        throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
+    }
+
+    // Fix: Coalesce a null justification to an empty string before validation.
+    if (data.justification === null) {
+        data.justification = "";
     }
     if (typeof data.justification !== 'string') {
-      throw new Error("'justification' must be a string");
+        throw new Error("'justification' must be a string");
     }
     return data;
-  }
+}
+
 };
 
 // --- PROMPT PACK DATA ---
