@@ -39,7 +39,6 @@ interface ResultsState {
     };
 }
 
-// FIX: Made JsonGenOptions generic to preserve validator return types.
 interface JsonGenOptions<T> {
     system?: string;
     user: string;
@@ -47,7 +46,6 @@ interface JsonGenOptions<T> {
     signal: AbortSignal;
 }
 
-// FIX: Updated ModelClient to use the generic JsonGenOptions.
 interface ModelClient {
     generateJSON<T>(opts: JsonGenOptions<T>): Promise<T>;
     generateText(opts: Omit<JsonGenOptions<any>, 'validator'>): Promise<string>;
@@ -57,8 +55,29 @@ interface ModelClient {
 // --- MANUAL VALIDATORS (replacing Zod) ---
 const validators = {
     domainResult: (data: any): DomainItem[] => {
-        if (!Array.isArray(data)) throw new Error("Domain result must be an array");
-        return data.map((item, idx) => {
+        let itemsToProcess: any[] = [];
+
+        // FIX: Handle cases where the LLM returns a single object instead of an array.
+        if (typeof data === 'object' && !Array.isArray(data) && data !== null) {
+            // Case 1: The object itself is the item that should have been in an array.
+            if ('item' in data && 'score_1to7' in data) {
+                itemsToProcess = [data];
+            } else {
+                // Case 2: The array is nested under a key in the returned object.
+                const potentialArray = Object.values(data).find(value => Array.isArray(value));
+                if (potentialArray) {
+                    itemsToProcess = potentialArray as any[];
+                }
+            }
+        } else if (Array.isArray(data)) {
+            itemsToProcess = data;
+        }
+
+        if (itemsToProcess.length === 0) {
+            throw new Error("Domain result is not a valid array of items or a recognized object structure.");
+        }
+
+        return itemsToProcess.map((item, idx) => {
             if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
                 throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
             }
@@ -482,7 +501,6 @@ const AgreeIIWorkflow: React.FC = () => {
         const client = getClient(selectedLlm, apiKeys[selectedLlm]);
         const fullText = guidelinePages.map(p => `[Page ${p.page}]\n${p.text}`).join('\n\n');
         
-        // No change needed here. Type inference now works correctly.
         const digest = await client.generateJSON({
             user: `${AGREE_II_PROMPT_PACK.prompts.digest_prompt}\n\nGuideline text:\n${fullText.substring(0, 150000)}`,
             system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
@@ -490,7 +508,6 @@ const AgreeIIWorkflow: React.FC = () => {
             signal,
         });
         
-        // This line will no longer cause an error.
         setResults(prev => ({ ...prev, digest }));
         setCurrentStep(2);
     });
