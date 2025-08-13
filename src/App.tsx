@@ -12,161 +12,152 @@ interface MiniSearch<T = any> {
 }
 
 interface EvidenceCitation {
-  page?: number;
-  section?: string;
+    page?: number;
+    section?: string;
 }
 
 interface DomainItem {
-  item: number;
-  score_1to7: number;
-  confidence_0to100: number;
-  evidence_citations: EvidenceCitation[];
-  justification: string;
+    item: number;
+    score_1to7: number;
+    confidence_0to100: number;
+    evidence_citations: EvidenceCitation[];
+    justification: string;
 }
 
 interface DomainResult {
-  name: string;
-  items: DomainItem[];
+    name: string;
+    items: DomainItem[];
 }
 
 interface ResultsState {
-  digest?: Record<string, unknown>;
-  domains?: Partial<Record<DomainId, DomainResult>>;
-  overall?: {
-    overall_quality_1to7: number;
-    recommend_use: string;
-    justification: string;
-  };
+    digest?: Record<string, unknown>;
+    domains?: Partial<Record<DomainId, DomainResult>>;
+    overall?: {
+        overall_quality_1to7: number;
+        recommend_use: string;
+        justification: string;
+    };
 }
 
-interface JsonGenOptions {
-  system?: string;
-  user: string;
-  validator?: (data: any) => any;
-  signal: AbortSignal;
+// FIX: Made JsonGenOptions generic to preserve validator return types.
+interface JsonGenOptions<T> {
+    system?: string;
+    user: string;
+    validator?: (data: any) => T;
+    signal: AbortSignal;
 }
 
+// FIX: Updated ModelClient to use the generic JsonGenOptions.
 interface ModelClient {
-  generateJSON<T>(opts: JsonGenOptions): Promise<T>;
-  generateText(opts: Omit<JsonGenOptions, 'validator'>): Promise<string>;
+    generateJSON<T>(opts: JsonGenOptions<T>): Promise<T>;
+    generateText(opts: Omit<JsonGenOptions<any>, 'validator'>): Promise<string>;
 }
+
 
 // --- MANUAL VALIDATORS (replacing Zod) ---
 const validators = {
-  domainResult: (data: any): DomainItem[] => {
-    if (!Array.isArray(data)) throw new Error("Domain result must be an array");
-    return data.map((item, idx) => {
-        if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
-            throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
-        }
-        if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
-            throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
-        }
-      // FIX: Added missing confidence check.
-        if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
-            throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
-        }
-      // FIX: Coalesce null justification to an empty string.
-        if (item.justification === null) {
-            item.justification = "";
-        }
-        if (typeof item.justification !== 'string' || item.justification.length > 300) {
-            throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
-        }
-
-        if (!Array.isArray(item.evidence_citations)) {
-            throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
-        }
-        
-      // FIX: Added validation for evidence_citations contents.
-        item.evidence_citations.forEach((citation: any, cIdx: number) => {
-          // Coalesce null section to an empty string.
-            if (citation.section === null) {
-                citation.section = "";
-            }
-            if (citation.page !== undefined && typeof citation.page !== 'number') {
-                throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
-            }
-            if (citation.section !== undefined && typeof citation.section !== 'string') {
-                throw new Error(`Item ${idx}, Citation ${cIdx}: 'section' must be a string`);
-            }
-        });
-
-        return item as DomainItem;
-    });
- },
-
-  digest: (data: any): Record<string, unknown> => {
-    if (typeof data !== 'object' || data === null) {
-      throw new Error("Digest must be an object");
-    }
-    // We're being permissive here since digest structure can vary
-    return data;
-  },
-  
-  overallAssessment: (data: any) => {
-    if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
-        throw new Error("'overall_quality_1to7' must be between 1 and 7");
-    }
-    if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
-        throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
-    }
-
-    // FIX: Coalesce a null justification to an empty string.
-    if (data.justification === null) {
-        data.justification = "";
-    }
-    if (typeof data.justification !== 'string') {
-        throw new Error("'justification' must be a string");
-    }
-    return data;
- }
+    domainResult: (data: any): DomainItem[] => {
+        if (!Array.isArray(data)) throw new Error("Domain result must be an array");
+        return data.map((item, idx) => {
+            if (typeof item.item !== 'number' || item.item < 1 || item.item > 23) {
+                throw new Error(`Item ${idx}: 'item' must be a number between 1 and 23`);
+            }
+            if (typeof item.score_1to7 !== 'number' || item.score_1to7 < 1 || item.score_1to7 > 7) {
+                throw new Error(`Item ${idx}: 'score_1to7' must be between 1 and 7`);
+            }
+            if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
+                throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
+            }
+            if (item.justification === null) {
+                item.justification = "";
+            }
+            if (typeof item.justification !== 'string' || item.justification.length > 300) {
+                throw new Error(`Item ${idx}: 'justification' must be a string with max 300 characters`);
+            }
+            if (!Array.isArray(item.evidence_citations)) {
+                throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
+            }
+            item.evidence_citations.forEach((citation: any, cIdx: number) => {
+                if (citation.section === null) {
+                    citation.section = "";
+                }
+                if (citation.page !== undefined && typeof citation.page !== 'number') {
+                    throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
+                }
+                if (citation.section !== undefined && typeof citation.section !== 'string') {
+                    throw new Error(`Item ${idx}, Citation ${cIdx}: 'section' must be a string`);
+                }
+            });
+            return item as DomainItem;
+        });
+    },
+    digest: (data: any): Record<string, unknown> => {
+        if (typeof data !== 'object' || data === null) {
+            throw new Error("Digest must be an object");
+        }
+        return data;
+    },
+    overallAssessment: (data: any) => {
+        if (typeof data.overall_quality_1to7 !== 'number' || data.overall_quality_1to7 < 1 || data.overall_quality_1to7 > 7) {
+            throw new Error("'overall_quality_1to7' must be between 1 and 7");
+        }
+        if (!['yes', 'yes_with_modifications', 'no'].includes(data.recommend_use)) {
+            throw new Error("'recommend_use' must be 'yes', 'yes_with_modifications', or 'no'");
+        }
+        if (data.justification === null) {
+            data.justification = "";
+        }
+        if (typeof data.justification !== 'string') {
+            throw new Error("'justification' must be a string");
+        }
+        return data;
+    }
 };
 
 // --- PROMPT PACK DATA ---
 const AGREE_II_PROMPT_PACK = {
-  "metadata": {
-    "name": "AGREE II LLM Prompt Pack",
-    "version": "v1.0",
-    "created": "2025-08-12",
-    "notes": "Prompts and schemas to appraise guidelines with AGREE II using LLMs.",
-    "source_manual": "AGREE II User's Manual & Instrument (2009; update 2017)",
-    "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes."
-  },
-  "recommended_model_settings": {
-    "temperature": 0.1,
-    "top_p": 1.0,
-    "frequency_penalty": 0.0,
-    "presence_penalty": 0.0
-  },
-  "prompts": {
-    "system_prompt": "You are an AGREE II appraiser. Judge only what is reported in the supplied text.\n\nRules:\n• Use the 23-item AGREE II (1–7). If information is missing or vague, score 1 and say why briefly.\n• Cite evidence with page/section anchors from the provided snippets only.\n• Output compact JSON exactly as requested (no chain of thought).\n• Do NOT compute a composite total; only item scores now. Domain scoring is handled downstream.\n• If authors claim something is \"not applicable,\" treat it as absent for that item and explain briefly.",
-    "digest_prompt": "Task: Read the provided guideline text and produce a structured DIGEST for AGREE II scoring.\nReturn JSON only. Keep strings short; prefer lists/booleans; include page numbers where possible.\n\nInclude:\n- scope_purpose: objectives, health_questions, population (with pages)\n- stakeholders: dev_group roster & roles; patient/public involvement; target_users\n- rigour: search (dbs, dates, terms, strategy location), selection_criteria, evidence_quality (risk-of-bias/consistency/applicability), formulating_recs (process & outcomes), benefits_harms, link_evidence_to_recs (mechanism + examples), external_review (purpose/methods/reviewers/outcomes/use), updating (commitment/interval/method)\n- clarity: recommendations list; options presented; key_recs_identified\n- applicability: barriers_facilitators; implementation_tools (list + access); resource_implications; monitoring_audit (criteria)\n- editorial_independence: funding (source + independence statement); conflicts (types, collection, declarations, management, influence)\n\nReturn JSON with these top-level keys exactly: guideline_meta, scope_purpose, stakeholders, rigour, clarity, applicability, editorial_independence.",
-    "domain_prompts": [
-        { "domain": 1, "name": "Scope & Purpose", "items": [1, 2, 3], "keywords": "objective, scope, purpose, aim, question, population, patient", "prompt": "Domain 1 — Scope & Purpose\nGrade items [1, 2, 3] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 1: Overall objectives described\n- State health intent(s), expected benefit/outcome, and target(s) for the guideline.\n- Score 7 if these are explicit and specific to the problem; 1 if vague or absent.\n\nItem 2: Health questions described\n- Describe the health questions with enough detail to frame PICO/context.\n- Include target population, interventions/exposures, comparisons (if any), outcomes, and setting/context.\n\nItem 3: Population described\n- Describe the population: age/sex, condition, severity/stage, comorbidities, and any exclusions.\n- Clarity and specificity warrant higher scores.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
-        { "domain": 2, "name": "Stakeholder Involvement", "items": [4, 5, 6], "keywords": "stakeholder, development group, patient, public, user, clinician", "prompt": "Domain 2 — Stakeholder Involvement\nGrade items [4, 5, 6] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 4: Multidisciplinary development group\n- List guideline group members with name, discipline/expertise, institution, location, and role.\n- Include appropriate mix for scope; presence of a methods expert strengthens score.\n\nItem 5: Patient/public views sought\n- Explain how patient/public views were sought (e.g., literature, surveys, focus groups, representation).\n- Summarize what was learned and how it influenced development and/or recommendations.\n\nItem 6: Target users defined\n- Define intended users (e.g., clinicians, policy makers, patients) and how they should use the guideline.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
-        { "domain": 3, "name": "Rigour of Development", "items": [7, 8, 9, 10, 11, 12, 13, 14], "keywords": "search, database, evidence, criteria, quality, formulate, recommendation, review, update", "prompt": "Domain 3 — Rigour of Development\nGrade items [7, 8, 9, 10, 11, 12, 13, 14] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 7: Systematic search methods\n- Name evidence sources/databases, specify dates, note search terms, and provide a reproducible strategy (e.g., appendix).\n\nItem 8: Evidence selection criteria\n- Report inclusion criteria (population, designs, etc.) and any exclusions.\n\nItem 9: Strengths/limitations of evidence\n- Describe how the body of evidence was assessed for bias/quality and interpreted.\n\nItem 10: Formulating recommendations\n- Describe the process to formulate recommendations (e.g., voting, Delphi).\n\nItem 11: Benefits and harms considered\n- Present benefits and harms/risks with an explicit trade-off.\n\nItem 12: Explicit link between recs and evidence\n- Explicitly link each recommendation to the supporting evidence.\n\nItem 13: External review\n- Explain purpose, methods, and findings of external review.\n\nItem 14: Updating procedure\n- State commitment to update, with interval/triggers and method.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
-        { "domain": 4, "name": "Clarity of Presentation", "items": [15, 16, 17], "keywords": "recommendation, specific, unambiguous, options, management, key", "prompt": "Domain 4 — Clarity of Presentation\nGrade items [15, 16, 17] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 15: Specific & unambiguous recommendations\n- Recommendations specify action, intent, target population, and caveats.\n\nItem 16: Options for management\n- Present alternative management options and the populations to which they apply.\n\nItem 17: Key recommendations identifiable\n- Key recommendations are easy to find (e.g., boxes, bolding).\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
-        { "domain": 5, "name": "Applicability", "items": [18, 19, 20, 21], "keywords": "applicability, barrier, facilitator, implementation, resource, cost, audit, monitoring", "prompt": "Domain 5 — Applicability\nGrade items [18, 19, 20, 21] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 18: Facilitators & barriers\n- Identify facilitators and barriers to application.\n\nItem 19: Implementation tools/advice\n- Provide implementation advice or tools (e.g., checklists, algorithms).\n\nItem 20: Resource implications\n- Identify resource/cost information considered.\n\nItem 21: Monitoring/audit criteria\n- Provide monitoring/audit criteria with operational definitions.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
-        { "domain": 6, "name": "Editorial Independence", "items": [22, 23], "keywords": "funding, funder, conflict of interest, competing interest, disclosure, independence", "prompt": "Domain 6 — Editorial Independence\nGrade items [22, 23] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 22: Funding independence\n- Name funding source and include a statement that the funder did not influence content.\n\nItem 23: Competing interests recorded & addressed\n- Describe how competing interests were considered, collected, and managed.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" }
-    ],
-    "overall_assessment_prompt": "AGREE II — Overall Guideline Assessment\n\nUsing ONLY the information supplied for this guideline and the domain evaluations, answer the two AGREE II overall items. Be concise.\n\nDomain Results:\n{{DOMAIN_RESULTS}}\n\nReturn JSON:\n{\n  \"overall_quality_1to7\": <int>,       // 1 = lowest quality, 7 = highest quality\n  \"recommend_use\": \"<yes|yes_with_modifications|no>\",\n  \"justification\": \"<≤2 sentences referencing the most influential domains/items>\"\n}"
-  }
+    "metadata": {
+        "name": "AGREE II LLM Prompt Pack",
+        "version": "v1.0",
+        "created": "2025-08-12",
+        "notes": "Prompts and schemas to appraise guidelines with AGREE II using LLMs.",
+        "source_manual": "AGREE II User's Manual & Instrument (2009; update 2017)",
+        "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes."
+    },
+    "recommended_model_settings": {
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+    },
+    "prompts": {
+        "system_prompt": "You are an AGREE II appraiser. Judge only what is reported in the supplied text.\n\nRules:\n• Use the 23-item AGREE II (1–7). If information is missing or vague, score 1 and say why briefly.\n• Cite evidence with page/section anchors from the provided snippets only.\n• Output compact JSON exactly as requested (no chain of thought).\n• Do NOT compute a composite total; only item scores now. Domain scoring is handled downstream.\n• If authors claim something is \"not applicable,\" treat it as absent for that item and explain briefly.",
+        "digest_prompt": "Task: Read the provided guideline text and produce a structured DIGEST for AGREE II scoring.\nReturn JSON only. Keep strings short; prefer lists/booleans; include page numbers where possible.\n\nInclude:\n- scope_purpose: objectives, health_questions, population (with pages)\n- stakeholders: dev_group roster & roles; patient/public involvement; target_users\n- rigour: search (dbs, dates, terms, strategy location), selection_criteria, evidence_quality (risk-of-bias/consistency/applicability), formulating_recs (process & outcomes), benefits_harms, link_evidence_to_recs (mechanism + examples), external_review (purpose/methods/reviewers/outcomes/use), updating (commitment/interval/method)\n- clarity: recommendations list; options presented; key_recs_identified\n- applicability: barriers_facilitators; implementation_tools (list + access); resource_implications; monitoring_audit (criteria)\n- editorial_independence: funding (source + independence statement); conflicts (types, collection, declarations, management, influence)\n\nReturn JSON with these top-level keys exactly: guideline_meta, scope_purpose, stakeholders, rigour, clarity, applicability, editorial_independence.",
+        "domain_prompts": [
+            { "domain": 1, "name": "Scope & Purpose", "items": [1, 2, 3], "keywords": "objective, scope, purpose, aim, question, population, patient", "prompt": "Domain 1 — Scope & Purpose\nGrade items [1, 2, 3] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 1: Overall objectives described\n- State health intent(s), expected benefit/outcome, and target(s) for the guideline.\n- Score 7 if these are explicit and specific to the problem; 1 if vague or absent.\n\nItem 2: Health questions described\n- Describe the health questions with enough detail to frame PICO/context.\n- Include target population, interventions/exposures, comparisons (if any), outcomes, and setting/context.\n\nItem 3: Population described\n- Describe the population: age/sex, condition, severity/stage, comorbidities, and any exclusions.\n- Clarity and specificity warrant higher scores.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 2, "name": "Stakeholder Involvement", "items": [4, 5, 6], "keywords": "stakeholder, development group, patient, public, user, clinician", "prompt": "Domain 2 — Stakeholder Involvement\nGrade items [4, 5, 6] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 4: Multidisciplinary development group\n- List guideline group members with name, discipline/expertise, institution, location, and role.\n- Include appropriate mix for scope; presence of a methods expert strengthens score.\n\nItem 5: Patient/public views sought\n- Explain how patient/public views were sought (e.g., literature, surveys, focus groups, representation).\n- Summarize what was learned and how it influenced development and/or recommendations.\n\nItem 6: Target users defined\n- Define intended users (e.g., clinicians, policy makers, patients) and how they should use the guideline.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 3, "name": "Rigour of Development", "items": [7, 8, 9, 10, 11, 12, 13, 14], "keywords": "search, database, evidence, criteria, quality, formulate, recommendation, review, update", "prompt": "Domain 3 — Rigour of Development\nGrade items [7, 8, 9, 10, 11, 12, 13, 14] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 7: Systematic search methods\n- Name evidence sources/databases, specify dates, note search terms, and provide a reproducible strategy (e.g., appendix).\n\nItem 8: Evidence selection criteria\n- Report inclusion criteria (population, designs, etc.) and any exclusions.\n\nItem 9: Strengths/limitations of evidence\n- Describe how the body of evidence was assessed for bias/quality and interpreted.\n\nItem 10: Formulating recommendations\n- Describe the process to formulate recommendations (e.g., voting, Delphi).\n\nItem 11: Benefits and harms considered\n- Present benefits and harms/risks with an explicit trade-off.\n\nItem 12: Explicit link between recs and evidence\n- Explicitly link each recommendation to the supporting evidence.\n\nItem 13: External review\n- Explain purpose, methods, and findings of external review.\n\nItem 14: Updating procedure\n- State commitment to update, with interval/triggers and method.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 4, "name": "Clarity of Presentation", "items": [15, 16, 17], "keywords": "recommendation, specific, unambiguous, options, management, key", "prompt": "Domain 4 — Clarity of Presentation\nGrade items [15, 16, 17] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 15: Specific & unambiguous recommendations\n- Recommendations specify action, intent, target population, and caveats.\n\nItem 16: Options for management\n- Present alternative management options and the populations to which they apply.\n\nItem 17: Key recommendations identifiable\n- Key recommendations are easy to find (e.g., boxes, bolding).\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 5, "name": "Applicability", "items": [18, 19, 20, 21], "keywords": "applicability, barrier, facilitator, implementation, resource, cost, audit, monitoring", "prompt": "Domain 5 — Applicability\nGrade items [18, 19, 20, 21] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 18: Facilitators & barriers\n- Identify facilitators and barriers to application.\n\nItem 19: Implementation tools/advice\n- Provide implementation advice or tools (e.g., checklists, algorithms).\n\nItem 20: Resource implications\n- Identify resource/cost information considered.\n\nItem 21: Monitoring/audit criteria\n- Provide monitoring/audit criteria with operational definitions.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 6, "name": "Editorial Independence", "items": [22, 23], "keywords": "funding, funder, conflict of interest, competing interest, disclosure, independence", "prompt": "Domain 6 — Editorial Independence\nGrade items [22, 23] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 22: Funding independence\n- Name funding source and include a statement that the funder did not influence content.\n\nItem 23: Competing interests recorded & addressed\n- Describe how competing interests were considered, collected, and managed.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" }
+        ],
+        "overall_assessment_prompt": "AGREE II — Overall Guideline Assessment\n\nUsing ONLY the information supplied for this guideline and the domain evaluations, answer the two AGREE II overall items. Be concise.\n\nDomain Results:\n{{DOMAIN_RESULTS}}\n\nReturn JSON:\n{\n  \"overall_quality_1to7\": <int>,         // 1 = lowest quality, 7 = highest quality\n  \"recommend_use\": \"<yes|yes_with_modifications|no>\",\n  \"justification\": \"<≤2 sentences referencing the most influential domains/items>\"\n}"
+    }
 };
 
 // --- UTILITY FUNCTIONS ---
 async function withRetries<T>(fn: () => Promise<T>, tries = 3, baseMs = 500): Promise<T> {
-  let lastErr: any;
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastErr = e;
-      if ((e as Error).name === 'AbortError') throw e;
-      await new Promise(r => setTimeout(r, baseMs * 2 ** i));
+    let lastErr: any;
+    for (let i = 0; i < tries; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastErr = e;
+            if ((e as Error).name === 'AbortError') throw e;
+            await new Promise(r => setTimeout(r, baseMs * 2 ** i));
+        }
     }
-  }
-  throw lastErr;
+    throw lastErr;
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
@@ -196,150 +187,136 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
 
 // --- MODEL CLIENT FACTORY ---
 function getClient(vendor: Vendor, apiKey: string): ModelClient {
-  const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
+    const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
 
-  const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
+    const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
 
-  const safeParseJson = <T,>(text: string, validator?: (data: any) => T): T => {
-    try {
-      // Try to extract JSON from markdown code blocks
-      const match = text.match(/```json([\s\S]*?)```/i);
-      const jsonString = match ? match[1].trim() : text.trim();
-      const parsedData = JSON.parse(jsonString);
-      
-      // If we have a validator, use it
-      if (validator) {
-        return validator(parsedData);
-      }
-      return parsedData as T;
-    } catch (e: any) {
-      throw new Error(`Failed to parse and validate JSON: ${e.message}`);
-    }
-  };
-
-  const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
-    return withRetries(async () => {
-      let apiUrl = "";
-      let requestBody: any = {};
-      let headers: Record<string, string> = {};
-
-      switch (vendor) {
-        case "gemini": {
-          apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-          headers = { "Content-Type": "application/json" };
-          requestBody = {
-            contents: [{ role: "user", parts: [{ text: opts.user }] }],
-            generationConfig: {
-              temperature,
-              topP: top_p,
-              responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
-            },
-            ...(opts.system && {
-              systemInstruction: { parts: [{ text: opts.system }] },
-            }),
-          };
-          break;
+    const safeParseJson = <T,>(text: string, validator?: (data: any) => T): T => {
+        try {
+            const match = text.match(/```json([\s\S]*?)```/i);
+            const jsonString = match ? match[1].trim() : text.trim();
+            const parsedData = JSON.parse(jsonString);
+            if (validator) {
+                return validator(parsedData);
+            }
+            return parsedData as T;
+        } catch (e: any) {
+            throw new Error(`Failed to parse and validate JSON: ${e.message}`);
         }
+    };
 
-        case "openai": {
-          apiUrl = "https://api.openai.com/v1/chat/completions";
-          headers = {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          };
+    const generate = async (opts: JsonGenOptions<any> & { isJsonMode: boolean }): Promise<any> => {
+        return withRetries(async () => {
+            let apiUrl = "";
+            let requestBody: any = {};
+            let headers: Record<string, string> = {};
 
-          const model = "gpt-4.1-2025-04-14"; // Using a non-reasoning model as fallback
-          const isReasoning = isOpenAIReasoningModel(model);
+            switch (vendor) {
+                case "gemini": {
+                    apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    headers = { "Content-Type": "application/json" };
+                    requestBody = {
+                        contents: [{ role: "user", parts: [{ text: opts.user }] }],
+                        generationConfig: {
+                            temperature,
+                            topP: top_p,
+                            responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
+                        },
+                        ...(opts.system && {
+                            systemInstruction: { parts: [{ text: opts.system }] },
+                        }),
+                    };
+                    break;
+                }
+                case "openai": {
+                    apiUrl = "https://api.openai.com/v1/chat/completions";
+                    headers = {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${apiKey}`,
+                    };
+                    const model = "gpt-4.1-2025-04-14";
+                    const isReasoning = isOpenAIReasoningModel(model);
+                    const messages = [
+                        ...(opts.system ? [{ role: "system", content: opts.system }] : []),
+                        { role: "user", content: opts.user },
+                    ];
+                    if (isReasoning) {
+                        requestBody = {
+                            model,
+                            messages,
+                            temperature: 1,
+                            max_completion_tokens: 8000,
+                        };
+                    } else {
+                        requestBody = {
+                            model,
+                            messages,
+                            temperature,
+                            top_p,
+                            ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
+                        };
+                    }
+                    break;
+                }
+                case "anthropic": {
+                    apiUrl = "https://api.anthropic.com/v1/messages";
+                    headers = {
+                        "Content-Type": "application/json",
+                        "x-api-key": apiKey,
+                        "anthropic-version": "2025-05-14",
+                    };
+                    requestBody = {
+                        model: "claude-sonnet-4-20250514",
+                        system: opts.system,
+                        messages: [{ role: "user", content: opts.user }],
+                        max_tokens: 4096,
+                        temperature,
+                        top_p,
+                    };
+                    break;
+                }
+                default:
+                    throw new Error(`Unsupported vendor: ${vendor}`);
+            }
 
-          const messages = [
-            ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-            { role: "user", content: opts.user },
-          ];
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(requestBody),
+                signal: opts.signal,
+            });
 
-          if (isReasoning) {
-            // Reasoning models: NO temperature, top_p, or response_format
-            requestBody = {
-              model,
-              messages,
-                temperature: 1,
-              max_completion_tokens: 8000,
-            };
-          } else {
-            // Non-reasoning models can use parameters
-            requestBody = {
-              model,
-              messages,
-              temperature,
-              top_p,
-              ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}),
-            };
-          }
-          break;
-        }
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(`API request failed: ${response.status} - ${errBody}`);
+            }
 
-        case "anthropic": {
-          apiUrl = "https://api.anthropic.com/v1/messages";
-          headers = {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2025-05-14",
-          };
-          requestBody = {
-            model: "claude-sonnet-4-20250514",
-            system: opts.system,
-            messages: [{ role: "user", content: opts.user }],
-            max_tokens: 4096,
-            temperature,
-            top_p,
-          };
-          break;
-        }
+            const data = await response.json();
+            let text = "";
+            switch (vendor) {
+                case "gemini":
+                    text = data.candidates[0].content.parts[0].text;
+                    break;
+                case "openai":
+                    text = data.choices[0].message.content;
+                    break;
+                case "anthropic":
+                    text = data.content[0].text;
+                    break;
+            }
+            return text;
+        });
+    };
 
-        default:
-          throw new Error(`Unsupported vendor: ${vendor}`);
-      }
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: opts.signal,
-      });
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`API request failed: ${response.status} - ${errBody}`);
-      }
-
-      const data = await response.json();
-
-      // Extract text from response
-      let text = "";
-      switch (vendor) {
-        case "gemini":
-          text = data.candidates[0].content.parts[0].text;
-          break;
-        case "openai":
-          text = data.choices[0].message.content;
-          break;
-        case "anthropic":
-          text = data.content[0].text;
-          break;
-      }
-
-      return text;
-    });
-  };
-
-  return {
-    generateJSON: async <T,>(opts: JsonGenOptions): Promise<T> => {
-      const text = await generate({ ...opts, isJsonMode: true });
-      return safeParseJson(text, opts.validator);
-    },
-    generateText: async (opts: Omit<JsonGenOptions, 'validator'>): Promise<string> => {
-      return generate({ ...opts, isJsonMode: false } as any);
-    },
-  };
+    return {
+        generateJSON: async <T,>(opts: JsonGenOptions<T>): Promise<T> => {
+            const text = await generate({ ...opts, isJsonMode: true });
+            return safeParseJson(text, opts.validator);
+        },
+        generateText: async (opts: Omit<JsonGenOptions<any>, 'validator'>): Promise<string> => {
+            return generate({ ...opts, isJsonMode: false } as any);
+        },
+    };
 }
 
 // --- ICONS ---
@@ -418,7 +395,7 @@ const AgreeIIWorkflow: React.FC = () => {
         miniSearchScript.onerror = () => setError("Error loading search script. Check network connection.");
         document.head.appendChild(miniSearchScript);
 
-        return () => { 
+        return () => {
             document.head.removeChild(pdfScript);
             document.head.removeChild(miniSearchScript);
         };
@@ -504,12 +481,16 @@ const AgreeIIWorkflow: React.FC = () => {
         setProcessingStatus('Generating structured digest...');
         const client = getClient(selectedLlm, apiKeys[selectedLlm]);
         const fullText = guidelinePages.map(p => `[Page ${p.page}]\n${p.text}`).join('\n\n');
+        
+        // No change needed here. Type inference now works correctly.
         const digest = await client.generateJSON({
             user: `${AGREE_II_PROMPT_PACK.prompts.digest_prompt}\n\nGuideline text:\n${fullText.substring(0, 150000)}`,
             system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
             validator: validators.digest,
             signal,
         });
+        
+        // This line will no longer cause an error.
         setResults(prev => ({ ...prev, digest }));
         setCurrentStep(2);
     });
@@ -545,12 +526,11 @@ const AgreeIIWorkflow: React.FC = () => {
                 .replace('<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>', `<EVIDENCE>${JSON.stringify(evidenceSnippets, null, 2)}</EVIDENCE>`);
 
             const domainResults = await client.generateJSON({
-            user: domainPrompt,
-            system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
-            validator: validators.domainResult, // This calls your new manual validator
-            signal,
-        });
-
+                user: domainPrompt,
+                system: AGREE_II_PROMPT_PACK.prompts.system_prompt,
+                validator: validators.domainResult,
+                signal,
+            });
 
             if (signal.aborted) throw new Error('Aborted');
             setResults(prev => ({
@@ -697,7 +677,7 @@ const AgreeIIWorkflow: React.FC = () => {
                     </div>
                 );
             case 3:
-                 return (
+                return (
                     <div>
                         <h2 className="text-xl font-semibold mb-2">Generate Overall Assessment</h2>
                         <p className="text-gray-600 mb-6">All domains have been evaluated. The LLM will now provide a final quality rating and recommendation.</p>
@@ -761,12 +741,12 @@ const AgreeIIWorkflow: React.FC = () => {
                 
                 {isProcessing && (
                      <div className="mb-6 p-4 bg-blue-100 border border-blue-300 rounded-md flex items-center justify-between">
-                        <div className="flex items-center">
-                            <div className="text-blue-500 mr-3 w-6 h-6">{ICONS.clock}</div>
-                            <span className="text-blue-800 font-medium">{processingStatus}</span>
-                        </div>
-                        <button onClick={handleCancel} className="bg-red-500 text-white px-3 py-1 rounded-md text-sm hover:bg-red-600">Cancel</button>
-                    </div>
+                         <div className="flex items-center">
+                             <div className="text-blue-500 mr-3 w-6 h-6">{ICONS.clock}</div>
+                             <span className="text-blue-800 font-medium">{processingStatus}</span>
+                         </div>
+                         <button onClick={handleCancel} className="bg-red-500 text-white px-3 py-1 rounded-md text-sm hover:bg-red-600">Cancel</button>
+                     </div>
                 )}
 
                 <div className="bg-white rounded-lg p-6 border border-gray-200 min-h-[300px] flex items-center justify-center">
