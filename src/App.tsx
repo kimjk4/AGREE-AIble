@@ -332,7 +332,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
   };
 
   return {
-    generateJSON: async <T>(opts: JsonGenOptions): Promise<T> => {
+    generateJSON: async <T,>(opts: JsonGenOptions): Promise<T> => {
       const text = await generate({ ...opts, isJsonMode: true });
       return safeParseJson(text, opts.validator);
     },
