@@ -628,7 +628,7 @@ const AgreeIIWorkflow: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-4">Choose the LLM to perform the assessment. Ensure you provide the corresponding API key.</p>
                 <select value={selectedLlm} onChange={(e) => setSelectedLlm(e.target.value as Vendor)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="gemini">Google Gemini 2.5 Flash</option>
-                    <option value="openai">OpenAI GPT-4.1 </option>
+                    <option value="openai">OpenAI GPT 4.1 </option>
                     <option value="anthropic">Anthropic Claude Sonnet 4</option>
                 </select>
             </div>
