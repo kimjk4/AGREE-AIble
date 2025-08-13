@@ -99,7 +99,7 @@ const AGREE_II_PROMPT_PACK = {
     "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes or product marketing."
   },
   "recommended_model_settings": {
-    "temperature": 0.1,
+    "temperature": default,
     "top_p": 1.0,
     "frequency_penalty": 0.0,
     "presence_penalty": 0.0
@@ -235,7 +235,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     apiUrl = 'https://api.openai.com/v1/chat/completions';
                     headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
                     requestBody = {
-                        model: "gpt-5",
+                        model: "gpt-5-2025-08-07",
                         messages: [
                             ...(opts.system ? [{ role: "system", content: opts.system }] : []),
                             { role: "user", content: opts.user }
