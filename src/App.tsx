@@ -283,11 +283,11 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
           requestBody = {
             contents: [{ role: "user", parts: [{ text: opts.user }] }],
             generationConfig: compact({
+              // Gemini preview accepts these; safe to keep
               temperature,
               topP: top_p,
-              responseMimeType: opts.isJsonMode
-                ? "application/json"
-                : "text/plain",
+              // Honor JSON vs text
+              responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
             }),
             ...(opts.system && {
               systemInstruction: { parts: [{ text: opts.system }] },
@@ -303,31 +303,38 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             Authorization: `Bearer ${apiKey}`,
           };
 
+          // Choose your model here
           const model = "gpt-5-2025-08-07"; // reasoning model
           const isReasoning = isOpenAIReasoningModel(model);
 
+          // Build base message array
+          const messages = [
+            ...(opts.system ? [{ role: "system", content: opts.system }] : []),
+            { role: "user", content: opts.user },
+          ];
+
+          // For reasoning models, DO NOT send temperature/top_p/response_format
+          // (these can trigger unsupported_value errors).
+          const reasoningPayload = isReasoning
+            ? {
+                reasoning: { effort: "medium" as const },
+                max_completion_tokens: 800,
+              }
+            : {
+                // Non-reasoning models can safely take sampling controls + response_format
+                temperature,
+                top_p,
+                response_format: opts.isJsonMode
+                  ? { type: "json_object" }
+                  : { type: "text" },
+              };
+
           requestBody = compact({
             model,
-            messages: [
-              ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-              { role: "user", content: opts.user },
-            ],
-            ...(isReasoning
-              ? {
-                  // Reasoning-safe fields only:
-                  reasoning: { effort: "medium" as const },
-                  max_completion_tokens: 800,
-                  // Don't send temperature/top_p/penalties/logprobs/response_format
-                }
-              : {
-                  // If you ever switch to non-reasoning OpenAI models, you can use these:
-                  temperature,
-                  top_p,
-                  response_format: opts.isJsonMode
-                    ? { type: "json_object" }
-                    : { type: "text" },
-                }),
+            messages,
+            ...reasoningPayload,
           });
+
           break;
         }
 
@@ -343,6 +350,7 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
             system: opts.system,
             messages: [{ role: "user", content: opts.user }],
             max_tokens: 4096,
+            // Anthropic supports temperature/top_p; keep them
             temperature,
             top_p,
           });
@@ -355,16 +363,17 @@ export function getClient(vendor: Vendor, apiKey: string): ModelClient {
 
       const data = await performFetch(apiUrl, requestBody, headers, opts.signal);
 
+      // Normalize text extraction per vendor
       let responseText = "";
       switch (vendor) {
         case "gemini":
-          responseText =
-            data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
           break;
         case "openai":
           responseText = data?.choices?.[0]?.message?.content ?? "";
           break;
         case "anthropic":
+          // Anthropic returns an array of content blocks; take the first text part
           responseText = data?.content?.[0]?.text ?? "";
           break;
       }
