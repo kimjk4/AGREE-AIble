@@ -99,7 +99,7 @@ const AGREE_II_PROMPT_PACK = {
     "license_and_use": "Per manual: reproduce for education, QA, and critical appraisal; not for commercial purposes or product marketing."
   },
   "recommended_model_settings": {
-    "temperature": default,
+    "temperature": 0.1,
     "top_p": 1.0,
     "frequency_penalty": 0.0,
     "presence_penalty": 0.0
@@ -179,100 +179,132 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
 
 // --- MODEL ABSTRACTION ---
 function getClient(vendor: Vendor, apiKey: string): ModelClient {
-    const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
+  const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
 
-    const safeParseJson = <T,>(text: string, schema: ZodType<T>): T => {
-        try {
-            const match = text.match(/```json([\s\S]*?)```/i);
-            const jsonString = match ? match[1].trim() : text.trim();
-            const parsedData = JSON.parse(jsonString);
-            const validationResult = schema.safeParse(parsedData);
-            if (!validationResult.success) {
-                const flatError = validationResult.error.flatten();
-                const errorMessages = Object.entries(flatError.fieldErrors)
-                    .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
-                    .join('; ');
-                throw new Error(`Schema validation failed: ${errorMessages}`);
-            }
-            return validationResult.data;
-        } catch (e: any) {
-            throw new Error(`Failed to parse and validate JSON. Reason: ${e.message}`);
+  // Small helper to strip undefined/null so we don't send unsupported fields.
+  const compact = <T extends Record<string, any>>(obj: T): T =>
+    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)) as T;
+
+  const safeParseJson = <T,>(text: string, schema: ZodType<T>): T => {
+    try {
+      const match = text.match(/```json([\s\S]*?)```/i);
+      const jsonString = match ? match[1].trim() : text.trim();
+      const parsedData = JSON.parse(jsonString);
+      const validationResult = schema.safeParse(parsedData);
+      if (!validationResult.success) {
+        const flatError = validationResult.error.flatten();
+        const errorMessages = Object.entries(flatError.fieldErrors)
+          .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
+          .join('; ');
+        throw new Error(`Schema validation failed: ${errorMessages}`);
+      }
+      return validationResult.data;
+    } catch (e: any) {
+      throw new Error(`Failed to parse and validate JSON. Reason: ${e.message}`);
+    }
+  };
+
+  const performFetch = async (url: string, body: object, headers: Record<string, string>, signal: AbortSignal) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`API request failed: ${response.status} - ${errBody}`);
+    }
+    return response.json();
+  };
+
+  const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
+    return withRetries(async () => {
+      let apiUrl: string, requestBody: any, headers: Record<string, string>;
+
+      switch (vendor) {
+        case 'gemini': {
+          apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+          headers = { 'Content-Type': 'application/json' };
+          // Gemini supports temperature/topP
+          requestBody = {
+            contents: [{ role: "user", parts: [{ text: opts.user }] }],
+            generationConfig: compact({
+              temperature,
+              topP: top_p,
+              responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
+            }),
+            ...(opts.system && { systemInstruction: { parts: [{ text: opts.system }] } }),
+          };
+          break;
         }
-    };
 
-    const performFetch = async (url: string, body: object, headers: Record<string, string>, signal: AbortSignal) => {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-            signal,
-        });
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`API request failed: ${response.status} - ${errBody}`);
+        case 'openai': {
+          apiUrl = 'https://api.openai.com/v1/chat/completions';
+          headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+
+          // IMPORTANT: This is a reasoning model; do NOT send temperature/top_p/penalties/logprobs.
+          // Use reasoning effort + max_completion_tokens instead.
+          requestBody = compact({
+            model: "gpt-5-2025-08-07",
+            messages: [
+              ...(opts.system ? [{ role: "system", content: opts.system }] : []),
+              { role: "user", content: opts.user }
+            ],
+            // No temperature/top_p here
+            reasoning: { effort: "medium" },        // tweak if you like: "low" | "medium" | "high"
+            max_completion_tokens: 800,
+            // For reasoning models, skip response_format; just ask for JSON and parse.
+          });
+          break;
         }
-        return response.json();
-    };
 
-    const generate = async (opts: JsonGenOptions & { isJsonMode: boolean }): Promise<any> => {
-        return withRetries(async () => {
-            let apiUrl: string, requestBody: object, headers: Record<string, string>;
+        case 'anthropic': {
+          apiUrl = 'https://api.anthropic.com/v1/messages';
+          headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          };
+          // Anthropic supports temperature and top_p
+          requestBody = compact({
+            model: "claude-sonnet-4-20250514",
+            system: opts.system,
+            messages: [{ role: "user", content: opts.user }],
+            max_tokens: 4096,
+            temperature,
+            top_p,
+          });
+          break;
+        }
+      }
 
-            switch (vendor) {
-                case 'gemini':
-                    apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    headers = { 'Content-Type': 'application/json' };
-                    requestBody = {
-                        contents: [{ role: "user", parts: [{ text: opts.user }] }],
-                        generationConfig: {
-                            temperature, topP: top_p,
-                            responseMimeType: opts.isJsonMode ? "application/json" : "text/plain",
-                        },
-                        ...(opts.system && { systemInstruction: { parts: [{ text: opts.system }] } }),
-                    };
-                    break;
-                case 'openai':
-                    apiUrl = 'https://api.openai.com/v1/chat/completions';
-                    headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-                    requestBody = {
-                        model: "gpt-5-2025-08-07",
-                        messages: [
-                            ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-                            { role: "user", content: opts.user }
-                        ],
-                        temperature, top_p,
-                        response_format: opts.isJsonMode ? { type: "json_object" } : { type: "text" },
-                    };
-                    break;
-                case 'anthropic':
-                    apiUrl = 'https://api.anthropic.com/v1/messages';
-                    headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
-                    requestBody = {
-                        model: "claude-sonnet-4-20250514",
-                        system: opts.system,
-                        messages: [{ role: "user", content: opts.user }],
-                        max_tokens: 4096, temperature, top_p,
-                    };
-                    break;
-            }
+      const data = await performFetch(apiUrl, requestBody, headers, opts.signal);
 
-            const data = await performFetch(apiUrl, requestBody, headers, opts.signal);
-            let responseText: string;
+      let responseText: string;
+      switch (vendor) {
+        case 'gemini':
+          responseText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+          break;
+        case 'openai':
+          responseText = data.choices?.[0]?.message?.content ?? '';
+          break;
+        case 'anthropic':
+          // Messages API returns an array of content blocks
+          responseText = data.content?.[0]?.text ?? '';
+          break;
+      }
 
-            switch (vendor) {
-                case 'gemini': responseText = data.candidates[0].content.parts[0].text; break;
-                case 'openai': responseText = data.choices[0].message.content; break;
-                case 'anthropic': responseText = data.content[0].text; break;
-            }
+      return opts.isJsonMode ? safeParseJson(responseText, opts.schema) : responseText;
+    });
+  };
 
-            return opts.isJsonMode ? safeParseJson(responseText, opts.schema) : responseText;
-        });
-    };
-
-    return {
-        generateJSON: <T,>(opts: JsonGenOptions): Promise<T> => generate({ ...opts, isJsonMode: true }),
-        generateText: (opts: Omit<JsonGenOptions, 'schema'>): Promise<string> => generate({ ...opts, schema: z.any(), isJsonMode: false }),
-    };
+  return {
+    generateJSON: <T,>(opts: JsonGenOptions): Promise<T> =>
+      generate({ ...opts, isJsonMode: true }),
+    generateText: (opts: Omit<JsonGenOptions, 'schema'>): Promise<string> =>
+      generate({ ...opts, schema: z.any(), isJsonMode: false }),
+  };
 }
 
 
