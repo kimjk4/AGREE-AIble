@@ -235,7 +235,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     apiUrl = 'https://api.openai.com/v1/chat/completions';
                     headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
                     requestBody = {
-                        model: "gpt-4o",
+                        model: "gpt-5",
                         messages: [
                             ...(opts.system ? [{ role: "system", content: opts.system }] : []),
                             { role: "user", content: opts.user }
@@ -248,7 +248,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     apiUrl = 'https://api.anthropic.com/v1/messages';
                     headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
                     requestBody = {
-                        model: "claude-3-5-sonnet-20240620",
+                        model: "claude-sonnet-4-20250514",
                         system: opts.system,
                         messages: [{ role: "user", content: opts.user }],
                         max_tokens: 4096, temperature, top_p,
@@ -540,8 +540,8 @@ const AgreeIIWorkflow: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-4">Choose the LLM to perform the assessment. Ensure you provide the corresponding API key.</p>
                 <select value={selectedLlm} onChange={(e) => setSelectedLlm(e.target.value as Vendor)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="gemini">Google Gemini 2.5 Flash</option>
-                    <option value="openai">OpenAI GPT-4o</option>
-                    <option value="anthropic">Anthropic Claude 3.5 Sonnet</option>
+                    <option value="openai">OpenAI GPT-5</option>
+                    <option value="anthropic">Anthropic Claude Sonnet 4</option>
                 </select>
             </div>
             <div>
@@ -653,8 +653,8 @@ const AgreeIIWorkflow: React.FC = () => {
         <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-gray-50 min-h-screen font-sans">
             <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="mb-8 text-center">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">AGREE II Guideline Assessment</h1>
-                    <p className="text-gray-600">An interactive tool for automated clinical guideline appraisal using LLMs.</p>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">AGREE-AIble: AGREE II Guideline Assessment</h1>
+                    <p className="text-gray-600">An interactive tool for automated clinical guideline appraisal using Large Language Models (LLMs).</p>
                 </div>
 
                 <ApiKeyManager />
