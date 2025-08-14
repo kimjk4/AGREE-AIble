@@ -265,7 +265,9 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
             const data = await response.json();
             let text = "";
             switch (vendor) {
-                case "gemini": text = data.candidates[0].content.parts[0].text; break;
+                case "gemini-flash":
+                case "gemini-pro":
+                    text = data.candidates[0].content.parts[0].text; break;
                 case "openai": text = data.choices[0].message.content; break;
                 case "anthropic": text = data.content[0].text; break;
             }
