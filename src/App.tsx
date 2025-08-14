@@ -237,7 +237,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                   apiUrl = "/api/anthropic";
                   headers = { "Content-Type": "application/json" };
                   requestBody = {
-                    model: "claude-3-5-sonnet-20241022",
+                    model: "claude-sonnet-4-20250514",
                     system: opts.system,
                     user: opts.user,
                     max_tokens: 4096,
