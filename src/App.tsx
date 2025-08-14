@@ -318,7 +318,7 @@ const AgreeIIWorkflow: React.FC = () => {
     const [isMiniSearchReady, setIsMiniSearchReady] = React.useState<boolean>(false);
     const [abortController, setAbortController] = React.useState<AbortController | null>(null);
     const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini-flash');
-    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({ gemini: '', openai: '', anthropic: '' });
+    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({ 'gemini-flash': '', 'gemini-pro':'', openai: '', anthropic: '' });
 
     const steps = [
         { name: 'Upload Guideline', icon: ICONS.upload },
@@ -480,9 +480,19 @@ const AgreeIIWorkflow: React.FC = () => {
     };
 
     const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
+    const { name, value } = e.target;
+    if (name === 'gemini') {
+        // If the Gemini input field changed, update both Gemini model keys
+        setApiKeys(prev => ({
+            ...prev,
+            'gemini-flash': value,
+            'gemini-pro': value
+        }));
+    } else {
+        // For other inputs (openai, anthropic), the behavior is the same
         setApiKeys(prev => ({ ...prev, [name as Vendor]: value }));
-    };
+    }
+};
 
     // --- UI Components ---
     const StepIndicator = ({ step, index, isActive, isCompleted }: { step: { name: string, icon: JSX.Element }, index: number, isActive: boolean, isCompleted: boolean }) => (
@@ -511,7 +521,7 @@ const AgreeIIWorkflow: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">API Keys</h3>
                 <p className="text-sm text-gray-600 mb-4">Your keys are stored only in your browser for this session.</p>
                 <div className="space-y-3">
-                    <input type="password" name="gemini" placeholder="Google AI Studio Key" value={apiKeys.gemini} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'gemini' ? 'border-blue-500' : 'border-gray-300'}`} />
+                    <input type="password" name="gemini" placeholder="Google AI Studio Key" value={apiKeys['gemini-flash']} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm.startsWith('gemini') ? 'border-blue-500' : 'border-gray-300'}`} />
                     <input type="password" name="openai" placeholder="OpenAI API Key" value={apiKeys.openai} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'openai' ? 'border-blue-500' : 'border-gray-300'}`} />
                     <input type="password" name="anthropic" placeholder="Anthropic API Key" value={apiKeys.anthropic} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'anthropic' ? 'border-blue-500' : 'border-gray-300'}`} />
                 </div>
