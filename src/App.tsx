@@ -246,7 +246,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     break;
                 }
                 case "openai": {
-                    apiUrl = "https://api.openai.com/v1/chat/completions";
+                    apiUrl = "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)";
                     headers = {
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${apiKey}`,
@@ -276,25 +276,26 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     break;
                 }
                 case "anthropic": {
+                    // Note: This assumes a local proxy at /api/anthropic to handle the request.
                     apiUrl = "/api/anthropic";
                     headers = {
-                            "Content-Type": "application/json",
-                            "x-api-key": apiKey,
-                            "anthropic-version": "2023-06-01",
-                        };
+                        "Content-Type": "application/json",
+                        "x-api-key": apiKey,
+                        "anthropic-version": "2023-06-01",
+                    };
                       requestBody = {
                         model: "claude-sonnet-4-20250514",
                         max_tokens: 4096,
                         messages: [{ role: "user", content: opts.user }],
                         temperature,
                         top_p,
-                      };
+                    };
 
                     if (opts.system) {
-                            requestBody.system = opts.system;
-                        }
+                        requestBody.system = opts.system;
+                    }
 
-                      break;
+                    break;
                 }
                 default:
                     throw new Error(`Unsupported vendor: ${vendor}`);
@@ -342,7 +343,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
 
 // --- ICONS ---
 const Icon = ({ path, className = "w-6 h-6" }: { path: string, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d={path} />
     </svg>
 );
@@ -708,24 +709,63 @@ const AgreeIIWorkflow: React.FC = () => {
                         </button>
                     </div>
                 );
-            case 4:
+            case 4: // <<< MODIFIED STEP
                 return (
-                    <div className="text-center">
-                        <h2 className="text-xl font-semibold mb-2">Assessment Complete</h2>
-                        <p className="text-gray-600 mb-6">Download the full AGREE II assessment results as a JSON file.</p>
-                        <div className="mb-6 p-6 bg-blue-50 rounded-lg text-left max-w-2xl mx-auto">
-                            <h3 className="font-bold text-lg text-blue-900 mb-3">Final Assessment Summary</h3>
+                    <div className="w-full">
+                        <div className="text-center">
+                            <h2 className="text-2xl font-semibold mb-2">Assessment Complete</h2>
+                            <p className="text-gray-600 mb-6">Review the full AGREE II assessment results below or download the complete JSON file.</p>
+                        </div>
+
+                        {/* Overall Assessment Card */}
+                        <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-lg text-left max-w-3xl mx-auto shadow-md">
+                            <h3 className="font-bold text-xl text-blue-900 mb-3">Final Assessment Summary</h3>
                             {results.overall && (
                                 <div className="space-y-2 text-gray-800">
-                                    <p><strong>Overall Quality:</strong> <span className="font-semibold text-blue-700">{results.overall.overall_quality_1to7}/7</span></p>
+                                    <p><strong>Overall Quality:</strong> <span className="font-semibold text-blue-700 text-lg">{results.overall.overall_quality_1to7}/7</span></p>
                                     <p><strong>Recommendation:</strong> <span className="font-semibold text-blue-700 capitalize">{results.overall.recommend_use.replace(/_/g, ' ')}</span></p>
                                     <p><strong>Justification:</strong> <span className="italic">"{results.overall.justification}"</span></p>
                                 </div>
                             )}
                         </div>
-                        <button onClick={downloadResults} className="bg-green-500 text-white px-8 py-3 rounded-md hover:bg-green-600 flex items-center mx-auto text-lg font-semibold">
-                            {ICONS.download} <span className="ml-2">Download Results</span>
-                        </button>
+
+                        {/* Detailed Domain Scores Section */}
+                        <div className="mt-8 text-left max-w-4xl mx-auto">
+                            <h3 className="font-bold text-xl text-gray-800 mb-4 text-center">Detailed Domain Scores</h3>
+                            <div className="space-y-4">
+                                {AGREE_II_PROMPT_PACK.prompts.domain_prompts.map(domainInfo => {
+                                    const domainResult = results.domains?.[domainInfo.domain as DomainId];
+                                    if (!domainResult) return null;
+
+                                    return (
+                                        <details key={domainInfo.domain} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm" open>
+                                            <summary className="font-semibold text-lg cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
+                                                Domain {domainInfo.domain}: {domainInfo.name}
+                                            </summary>
+                                            <div className="mt-4 pt-4 space-y-4 border-t">
+                                                {domainResult.items.map(item => (
+                                                    <div key={item.item} className="pl-4 border-l-2 border-gray-200">
+                                                        <p className="font-semibold text-gray-900">
+                                                            Item {item.item}: <span className="font-bold text-blue-600">{item.score_1to7}/7</span>
+                                                        </p>
+                                                        <blockquote className="text-sm text-gray-600 italic mt-1 border-l-4 border-gray-300 pl-3">
+                                                            {item.justification}
+                                                        </blockquote>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Download Button */}
+                        <div className="mt-10 text-center">
+                            <button onClick={downloadResults} className="bg-green-500 text-white px-8 py-3 rounded-md hover:bg-green-600 flex items-center mx-auto text-lg font-semibold shadow-lg hover:shadow-xl transition-shadow">
+                                {ICONS.download} <span className="ml-2">Download Full Results (JSON)</span>
+                            </button>
+                        </div>
                     </div>
                 );
             default:
@@ -777,3 +817,9 @@ const AgreeIIWorkflow: React.FC = () => {
 };
 
 export default AgreeIIWorkflow;
+
+
+
+
+
+
