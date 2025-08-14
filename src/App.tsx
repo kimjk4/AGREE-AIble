@@ -281,6 +281,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                             "Content-Type": "application/json",
                             "x-api-key": apiKey,
                             "anthropic-version": "2023-06-01",
+                            "anthropic-dangerous-direct-browser-access": "true",
                         };
                       requestBody = {
                         model: "claude-sonnet-4-20250514",
