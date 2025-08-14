@@ -244,7 +244,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     max_tokens: 4096,
                     temperature: temperature || 0.1,
                     top_p: top_p || 1.0,
-                    apiKey: apiKeys // Pass the user-provided API key
+                    apiKey: apiKey // Pass the user-provided API key
                   };
                   break;
                 }
