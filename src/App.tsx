@@ -237,11 +237,6 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                   apiUrl = "/api/anthropic";
                   headers = { "Content-Type": "application/json" };
                   
-                  // Make sure we have an API key
-                  if (!apiKeys.anthropic && !process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY) {
-                    throw new Error("Anthropic API key is required");
-                  }
-                  
                   requestBody = {
                     model: "claude-sonnet-4-20250514", // Use correct model name
                     system: opts.system || "",
