@@ -57,7 +57,6 @@ interface ModelClient {
 const validators = {
     domainResult: (data: any): DomainItem[] => {
         let itemsToProcess: any[] = [];
-
         if (typeof data === 'object' && !Array.isArray(data) && data !== null) {
             if ('item' in data && 'score_1to7' in data) {
                 itemsToProcess = [data];
@@ -85,21 +84,17 @@ const validators = {
             if (typeof item.confidence_0to100 !== 'number' || item.confidence_0to100 < 0 || item.confidence_0to100 > 100) {
                 throw new Error(`Item ${idx}: 'confidence_0to100' must be between 0 and 100`);
             }
-            
             if (typeof item.justification !== 'string') {
                 item.justification = "";
             }
             if (item.justification.length > 300) {
                 item.justification = item.justification.substring(0, 297) + "...";
             }
-
             if (!Array.isArray(item.evidence_citations)) {
                 throw new Error(`Item ${idx}: 'evidence_citations' must be an array`);
             }
             item.evidence_citations.forEach((citation: any, cIdx: number) => {
-                if (citation.section === null) {
-                    citation.section = "";
-                }
+                if (citation.section === null) { citation.section = ""; }
                 if (citation.page !== undefined && typeof citation.page !== 'number') {
                     throw new Error(`Item ${idx}, Citation ${cIdx}: 'page' must be a number`);
                 }
@@ -130,7 +125,7 @@ const validators = {
     }
 };
 
-// --- PROMPT PACK DATA (abbreviated for brevity) ---
+// --- PROMPT PACK DATA ---
 const AGREE_II_PROMPT_PACK = {
     "metadata": {
         "name": "AGREE II LLM Prompt Pack",
@@ -143,16 +138,16 @@ const AGREE_II_PROMPT_PACK = {
     "recommended_model_settings": { "temperature": 0.1, "top_p": 1.0, "frequency_penalty": 0.0, "presence_penalty": 0.0 },
     "prompts": {
         "system_prompt": "You are an AGREE II appraiser. Judge only what is reported in the supplied text.\n\nRules:\n• Use the 23-item AGREE II (1–7). If information is missing or vague, score 1 and say why briefly.\n• Cite evidence with page/section anchors from the provided snippets only.\n• Output compact JSON exactly as requested (no chain of thought).\n• Do NOT compute a composite total; only item scores now. Domain scoring is handled downstream.\n• If authors claim something is \"not applicable,\" treat it as absent for that item and explain briefly.",
-        "digest_prompt": "Task: Read the provided guideline text and produce a structured DIGEST for AGREE II scoring...",
+        "digest_prompt": "Task: Read the provided guideline text and produce a structured DIGEST for AGREE II scoring.\nReturn JSON only. Keep strings short; prefer lists/booleans; include page numbers where possible.\n\nInclude:\n- scope_purpose: objectives, health_questions, population (with pages)\n- stakeholders: dev_group roster & roles; patient/public involvement; target_users\n- rigour: search (dbs, dates, terms, strategy location), selection_criteria, evidence_quality (risk-of-bias/consistency/applicability), formulating_recs (process & outcomes), benefits_harms, link_evidence_to_recs (mechanism + examples), external_review (purpose/methods/reviewers/outcomes/use), updating (commitment/interval/method)\n- clarity: recommendations list; options presented; key_recs_identified\n- applicability: barriers_facilitators; implementation_tools (list + access); resource_implications; monitoring_audit (criteria)\n- editorial_independence: funding (source + independence statement); conflicts (types, collection, declarations, management, influence)\n\nReturn JSON with these top-level keys exactly: guideline_meta, scope_purpose, stakeholders, rigour, clarity, applicability, editorial_independence.",
         "domain_prompts": [
-            { "domain": 1, "name": "Scope & Purpose", "items": [1, 2, 3], "keywords": "objective, scope, purpose, aim, question, population, patient", "prompt": "Domain 1 — Scope & Purpose\nGrade items [1, 2, 3]..." },
-            { "domain": 2, "name": "Stakeholder Involvement", "items": [4, 5, 6], "keywords": "stakeholder, development group, patient, public, user, clinician", "prompt": "Domain 2 — Stakeholder Involvement\nGrade items [4, 5, 6]..." },
-            { "domain": 3, "name": "Rigour of Development", "items": [7, 8, 9, 10, 11, 12, 13, 14], "keywords": "search, database, evidence, criteria, quality, formulate, recommendation, review, update", "prompt": "Domain 3 — Rigour of Development\nGrade items [7, 8, 9, 10, 11, 12, 13, 14]..." },
-            { "domain": 4, "name": "Clarity of Presentation", "items": [15, 16, 17], "keywords": "recommendation, specific, unambiguous, options, management, key", "prompt": "Domain 4 — Clarity of Presentation\nGrade items [15, 16, 17]..." },
-            { "domain": 5, "name": "Applicability", "items": [18, 19, 20, 21], "keywords": "applicability, barrier, facilitator, implementation, resource, cost, audit, monitoring", "prompt": "Domain 5 — Applicability\nGrade items [18, 19, 20, 21]..." },
-            { "domain": 6, "name": "Editorial Independence", "items": [22, 23], "keywords": "funding, funder, conflict of interest, competing interest, disclosure, independence", "prompt": "Domain 6 — Editorial Independence\nGrade items [22, 23]..." }
+            { "domain": 1, "name": "Scope & Purpose", "items": [1, 2, 3], "keywords": "objective, scope, purpose, aim, question, population, patient", "prompt": "Domain 1 — Scope & Purpose\nGrade items [1, 2, 3] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 1: Overall objectives described\n- State health intent(s), expected benefit/outcome, and target(s) for the guideline.\n- Score 7 if these are explicit and specific to the problem; 1 if vague or absent.\n\nItem 2: Health questions described\n- Describe the health questions with enough detail to frame PICO/context.\n- Include target population, interventions/exposures, comparisons (if any), outcomes, and setting/context.\n\nItem 3: Population described\n- Describe the population: age/sex, condition, severity/stage, comorbidities, and any exclusions.\n- Clarity and specificity warrant higher scores.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 2, "name": "Stakeholder Involvement", "items": [4, 5, 6], "keywords": "stakeholder, development group, patient, public, user, clinician", "prompt": "Domain 2 — Stakeholder Involvement\nGrade items [4, 5, 6] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 4: Multidisciplinary development group\n- List guideline group members with name, discipline/expertise, institution, location, and role.\n- Include appropriate mix for scope; presence of a methods expert strengthens score.\n\nItem 5: Patient/public views sought\n- Explain how patient/public views were sought (e.g., literature, surveys, focus groups, representation).\n- Summarize what was learned and how it influenced development and/or recommendations.\n\nItem 6: Target users defined\n- Define intended users (e.g., clinicians, policy makers, patients) and how they should use the guideline.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 3, "name": "Rigour of Development", "items": [7, 8, 9, 10, 11, 12, 13, 14], "keywords": "search, database, evidence, criteria, quality, formulate, recommendation, review, update", "prompt": "Domain 3 — Rigour of Development\nGrade items [7, 8, 9, 10, 11, 12, 13, 14] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 7: Systematic search methods\n- Name evidence sources/databases, specify dates, note search terms, and provide a reproducible strategy (e.g., appendix).\n\nItem 8: Evidence selection criteria\n- Report inclusion criteria (population, designs, etc.) and any exclusions.\n\nItem 9: Strengths/limitations of evidence\n- Describe how the body of evidence was assessed for bias/quality and interpreted.\n\nItem 10: Formulating recommendations\n- Describe the process to formulate recommendations (e.g., voting, Delphi).\n\nItem 11: Benefits and harms considered\n- Present benefits and harms/risks with an explicit trade-off.\n\nItem 12: Explicit link between recs and evidence\n- Explicitly link each recommendation to the supporting evidence.\n\nItem 13: External review\n- Explain purpose, methods, and findings of external review.\n\nItem 14: Updating procedure\n- State commitment to update, with interval/triggers and method.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 4, "name": "Clarity of Presentation", "items": [15, 16, 17], "keywords": "recommendation, specific, unambiguous, options, management, key", "prompt": "Domain 4 — Clarity of Presentation\nGrade items [15, 16, 17] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 15: Specific & unambiguous recommendations\n- Recommendations specify action, intent, target population, and caveats.\n\nItem 16: Options for management\n- Present alternative management options and the populations to which they apply.\n\nItem 17: Key recommendations identifiable\n- Key recommendations are easy to find (e.g., boxes, bolding).\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 5, "name": "Applicability", "items": [18, 19, 20, 21], "keywords": "applicability, barrier, facilitator, implementation, resource, cost, audit, monitoring", "prompt": "Domain 5 — Applicability\nGrade items [18, 19, 20, 21] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 18: Facilitators & barriers\n- Identify facilitators and barriers to application.\n\nItem 19: Implementation tools/advice\n- Provide implementation advice or tools (e.g., checklists, algorithms).\n\nItem 20: Resource implications\n- Identify resource/cost information considered.\n\nItem 21: Monitoring/audit criteria\n- Provide monitoring/audit criteria with operational definitions.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" },
+            { "domain": 6, "name": "Editorial Independence", "items": [22, 23], "keywords": "funding, funder, conflict of interest, competing interest, disclosure, independence", "prompt": "Domain 6 — Editorial Independence\nGrade items [22, 23] in ONE response. Use ONLY <DIGEST> slices and <EVIDENCE> snippets.\n\nItem 22: Funding independence\n- Name funding source and include a statement that the funder did not influence content.\n\nItem 23: Competing interests recorded & addressed\n- Describe how competing interests were considered, collected, and managed.\nReturn JSON (list of objects):\n[\n  {\"item\": <int>, \"score_1to7\": <int>, \"confidence_0to100\": <int>,\n   \"evidence_citations\":[{\"page\": <int>, \"section\":\"<short>\"}],\n   \"justification\":\"<≤2 sentences>\"},\n  ...\n]\n\n<DIGEST>{...domain-relevant fields only...}</DIGEST>\n<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>" }
         ],
-        "overall_assessment_prompt": "AGREE II — Overall Guideline Assessment\n\nUsing ONLY the information supplied..."
+        "overall_assessment_prompt": "AGREE II — Overall Guideline Assessment\n\nUsing ONLY the information supplied for this guideline and the domain evaluations, answer the two AGREE II overall items. Be concise.\n\nDomain Results:\n{{DOMAIN_RESULTS}}\n\nReturn JSON:\n{\n  \"overall_quality_1to7\": <int>,         // 1 = lowest quality, 7 = highest quality\n  \"recommend_use\": \"<yes|yes_with_modifications|no>\",\n  \"justification\": \"<≤2 sentences referencing the most influential domains/items>\"\n}"
     }
 };
 
@@ -167,11 +162,108 @@ function calculateDomainScore(items: DomainItem[], domainConfig: { items: number
     return Math.round(scaledScore);
 }
 
-async function withRetries<T>(fn: () => Promise<T>, tries = 3, baseMs = 500): Promise<T> { /* ... Function content is correct ... */ }
-async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> { /* ... Function content is correct ... */ }
+async function withRetries<T>(fn: () => Promise<T>, tries = 3, baseMs = 500): Promise<T> {
+    let lastErr: any;
+    for (let i = 0; i < tries; i++) {
+        try { return await fn(); } catch (e) {
+            lastErr = e;
+            if ((e as Error).name === 'AbortError') throw e;
+            await new Promise(r => setTimeout(r, baseMs * 2 ** i));
+        }
+    }
+    throw lastErr;
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    const activePromises: Set<Promise<void>> = new Set();
+    let index = 0;
+    const run = async () => {
+        while (index < items.length) {
+            const currentIndex = index++;
+            const item = items[currentIndex];
+            const promise = (async () => { results[currentIndex] = await worker(item); })().then(p => { activePromises.delete(p as any); return p; });
+            activePromises.add(promise);
+            if (activePromises.size >= limit) { await Promise.race(activePromises); }
+        }
+    };
+    const runners = Array.from({ length: Math.min(limit, items.length) }, run);
+    await Promise.all(runners);
+    await Promise.all(Array.from(activePromises));
+    return results;
+}
 
 // --- MODEL CLIENT FACTORY ---
-function getClient(vendor: Vendor, apiKey: string): ModelClient { /* ... Function content is correct ... */ }
+function getClient(vendor: Vendor, apiKey: string): ModelClient {
+    const { temperature, top_p } = AGREE_II_PROMPT_PACK.recommended_model_settings;
+    const isOpenAIReasoningModel = (model: string) => /^gpt-5\b|^o[0-9]/i.test(model);
+    const safeParseJson = <T,>(text: string, validator?: (data: any) => T): T => {
+        try {
+            const match = text.match(/```json([\s\S]*?)```/i);
+            const jsonString = match ? match[1].trim() : text.trim();
+            const parsedData = JSON.parse(jsonString);
+            if (validator) { return validator(parsedData); }
+            return parsedData as T;
+        } catch (e: any) { throw new Error(`Failed to parse and validate JSON: ${e.message}`); }
+    };
+    const generate = async (opts: JsonGenOptions<any> & { isJsonMode: boolean }): Promise<any> => {
+        return withRetries(async () => {
+            let apiUrl = "";
+            let requestBody: any = {};
+            let headers: Record<string, string> = {};
+            switch (vendor) {
+                case "gemini":
+                    apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    headers = { "Content-Type": "application/json" };
+                    requestBody = {
+                        contents: [{ role: "user", parts: [{ text: opts.user }] }],
+                        generationConfig: { temperature, topP: top_p, responseMimeType: opts.isJsonMode ? "application/json" : "text/plain", },
+                        ...(opts.system && { systemInstruction: { parts: [{ text: opts.system }] }, }),
+                    };
+                    break;
+                case "openai":
+                    apiUrl = "https://api.openai.com/v1/chat/completions";
+                    headers = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, };
+                    const model = "gpt-4.1-2025-04-14";
+                    const isReasoning = isOpenAIReasoningModel(model);
+                    const messages = [ ...(opts.system ? [{ role: "system", content: opts.system }] : []), { role: "user", content: opts.user }, ];
+                    if (isReasoning) {
+                        requestBody = { model, messages, temperature: 1, max_completion_tokens: 8000, };
+                    } else {
+                        requestBody = { model, messages, temperature, top_p, ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}), };
+                    }
+                    break;
+                case "anthropic":
+                    apiUrl = "/api/anthropic";
+                    headers = { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", };
+                    requestBody = { model: "claude-sonnet-4-20250514", max_tokens: 4096, messages: [{ role: "user", content: opts.user }], temperature, top_p, };
+                    if (opts.system) { requestBody.system = opts.system; }
+                    break;
+                default:
+                    throw new Error(`Unsupported vendor: ${vendor}`);
+            }
+            const response = await fetch(apiUrl, { method: "POST", headers, body: JSON.stringify(requestBody), signal: opts.signal, });
+            if (!response.ok) { const errBody = await response.text(); throw new Error(`API request failed: ${response.status} - ${errBody}`); }
+            const data = await response.json();
+            let text = "";
+            switch (vendor) {
+                case "gemini": text = data.candidates[0].content.parts[0].text; break;
+                case "openai": text = data.choices[0].message.content; break;
+                case "anthropic": text = data.content[0].text; break;
+            }
+            return text;
+        });
+    };
+    return {
+        generateJSON: async <T,>(opts: JsonGenOptions<T>): Promise<T> => {
+            const text = await generate({ ...opts, isJsonMode: true });
+            return safeParseJson(text, opts.validator);
+        },
+        generateText: async (opts: Omit<JsonGenOptions<any>, 'validator'>): Promise<string> => {
+            return generate({ ...opts, isJsonMode: false } as any);
+        },
+    };
+}
 
 
 // --- ICONS ---
@@ -206,9 +298,7 @@ const AgreeIIWorkflow: React.FC = () => {
     const [isMiniSearchReady, setIsMiniSearchReady] = React.useState<boolean>(false);
     const [abortController, setAbortController] = React.useState<AbortController | null>(null);
     const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini');
-    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({
-        gemini: '', openai: '', anthropic: ''
-    });
+    const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({ gemini: '', openai: '', anthropic: '' });
 
     const steps = [
         { name: 'Upload Guideline', icon: ICONS.upload },
@@ -218,19 +308,115 @@ const AgreeIIWorkflow: React.FC = () => {
         { name: 'Download Results', icon: ICONS.download }
     ];
 
-    React.useEffect(() => { /* ... Function content is correct ... */ }, []);
-    async function extractPdfPages(file: File): Promise<{ id: number; page: number; text: string }[]> { /* ... Function content is correct ... */ }
-    const handleCancel = () => { /* ... Function content is correct ... */ };
-    const runCancellableProcess = async (processFunction: (signal: AbortSignal) => Promise<void>) => { /* ... Function content is correct ... */ };
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => { /* ... Function content is correct ... */ };
-    const generateDigest = () => runCancellableProcess(async (signal) => { /* ... Function content is correct ... */ });
-    
+    React.useEffect(() => {
+        const pdfScript = document.createElement('script');
+        const pdfjsVersion = '4.4.168';
+        pdfScript.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsVersion}/pdf.min.mjs`;
+        pdfScript.type = 'module';
+        pdfScript.onload = () => {
+            const pdfjsLib = (window as any).pdfjsLib;
+            if (pdfjsLib) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsVersion}/pdf.worker.min.mjs`;
+                setIsPdfJsReady(true);
+            } else { setError("Failed to load the PDF processing library."); }
+        };
+        pdfScript.onerror = () => setError("Error loading PDF script. Check network connection.");
+        document.head.appendChild(pdfScript);
+
+        const miniSearchScript = document.createElement('script');
+        miniSearchScript.src = `https://cdn.jsdelivr.net/npm/minisearch@6.3.0/dist/umd/index.min.js`;
+        miniSearchScript.onload = () => {
+            if ((window as any).MiniSearch) { setIsMiniSearchReady(true); } else { setError("Failed to load the search library."); }
+        };
+        miniSearchScript.onerror = () => setError("Error loading search script. Check network connection.");
+        document.head.appendChild(miniSearchScript);
+
+        return () => {
+            document.head.removeChild(pdfScript);
+            document.head.removeChild(miniSearchScript);
+        };
+    }, []);
+
+    async function extractPdfPages(file: File): Promise<{ id: number; page: number; text: string }[]> {
+        const pdfjsLib = (window as any).pdfjsLib;
+        if (!pdfjsLib) throw new Error("PDF library is not loaded yet.");
+        const buf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        const pages = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const text = content.items.map((it: any) => it.str).join(" ");
+            pages.push({ id: p, page: p, text });
+        }
+        return pages;
+    }
+
+    const handleCancel = () => {
+        if (abortController) {
+            abortController.abort();
+            setProcessingStatus('Cancelling...');
+        }
+    };
+
+    const runCancellableProcess = async (processFunction: (signal: AbortSignal) => Promise<void>) => {
+        const controller = new AbortController();
+        setAbortController(controller);
+        setIsProcessing(true);
+        setError('');
+        try {
+            await processFunction(controller.signal);
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                setError('Operation cancelled by user.');
+                setProcessingStatus('Cancelled.');
+            } else { setError(err.message); }
+        } finally {
+            setIsProcessing(false);
+            setAbortController(null);
+        }
+    };
+
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const uploadedFile = event.target.files?.[0];
+        if (!uploadedFile) return;
+        setFile(uploadedFile);
+        setError('');
+        setIsProcessing(true);
+        setProcessingStatus('Reading and indexing file...');
+        try {
+            const pages = uploadedFile.type === 'application/pdf' ? await extractPdfPages(uploadedFile) : [{ id: 1, page: 1, text: await uploadedFile.text() }];
+            setGuidelinePages(pages);
+            const MiniSearch = (window as any).MiniSearch as MiniSearch;
+            const miniSearch = new MiniSearch({ fields: ['text'], storeFields: ['page', 'text'], idField: 'id', });
+            await miniSearch.addAllAsync(pages);
+            setSearchIndex(miniSearch);
+            setCurrentStep(1);
+        } catch (err: any) {
+            setError(`Error processing file: ${err.message}`);
+            setFile(null);
+            setGuidelinePages([]);
+            setSearchIndex(null);
+        } finally {
+            setIsProcessing(false);
+            setProcessingStatus('');
+        }
+    };
+
+    const generateDigest = () => runCancellableProcess(async (signal) => {
+        setProcessingStatus('Generating structured digest...');
+        const client = getClient(selectedLlm, apiKeys[selectedLlm]);
+        const fullText = guidelinePages.map(p => `[Page ${p.page}]\n${p.text}`).join('\n\n');
+        const digest = await client.generateJSON({ user: `${AGREE_II_PROMPT_PACK.prompts.digest_prompt}\n\nGuideline text:\n${fullText.substring(0, 150000)}`, system: AGREE_II_PROMPT_PACK.prompts.system_prompt, validator: validators.digest, signal, });
+        setResults(prev => ({ ...prev, digest }));
+        setCurrentStep(2);
+    });
+
     const evaluateDomains = () => runCancellableProcess(async (signal) => {
         if (!searchIndex) throw new Error("Search index is not available.");
         setResults(prev => ({ ...prev, domains: {} }));
         const domainPrompts = AGREE_II_PROMPT_PACK.prompts.domain_prompts;
         const client = getClient(selectedLlm, apiKeys[selectedLlm]);
-
         const scoreDomain = async (domainConfig: typeof domainPrompts[0]) => {
             if (signal.aborted) throw new Error('Aborted');
             setProcessingStatus(`Evaluating Domain ${domainConfig.domain}: ${domainConfig.name}...`);
@@ -238,32 +424,80 @@ const AgreeIIWorkflow: React.FC = () => {
             const evidenceSnippets = searchResults.slice(0, 5).map(result => ({ snippet: result.text.slice(0, 1000), pages: [result.page] }));
             const digestSlice = { scope_purpose: results.digest?.scope_purpose, stakeholders: results.digest?.stakeholders, rigour: results.digest?.rigour, clarity: results.digest?.clarity, applicability: results.digest?.applicability, editorial_independence: results.digest?.editorial_independence, };
             const domainPrompt = domainConfig.prompt.replace('<DIGEST>{...domain-relevant fields only...}</DIGEST>', `<DIGEST>${JSON.stringify(digestSlice, null, 2)}</DIGEST>`).replace('<EVIDENCE>[{\"snippet\":\"...\", \"pages\":[...]}]</EVIDENCE>', `<EVIDENCE>${JSON.stringify(evidenceSnippets, null, 2)}</EVIDENCE>`);
-
             const domainItems = await client.generateJSON({ user: domainPrompt, system: AGREE_II_PROMPT_PACK.prompts.system_prompt, validator: validators.domainResult, signal, });
             const score = calculateDomainScore(domainItems, domainConfig);
             if (signal.aborted) throw new Error('Aborted');
-
             setResults(prev => {
                 const newDomainData = { name: domainConfig.name, items: domainItems, calculated_score: score };
                 return { ...prev, domains: { ...prev.domains, [domainConfig.domain as DomainId]: newDomainData } };
             });
         };
-
         await mapLimit(domainPrompts, 2, scoreDomain);
         if (signal.aborted) return;
         setProcessingStatus('All domains evaluated.');
         setCurrentStep(3);
     });
     
-    const generateOverallAssessment = () => runCancellableProcess(async (signal) => { /* ... Function content is correct ... */ });
-    const downloadResults = () => { /* ... Function content is correct ... */ };
-    const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => { /* ... Function content is correct ... */ };
+    const generateOverallAssessment = () => runCancellableProcess(async (signal) => {
+        setProcessingStatus('Generating final assessment...');
+        const client = getClient(selectedLlm, apiKeys[selectedLlm]);
+        const overallPrompt = AGREE_II_PROMPT_PACK.prompts.overall_assessment_prompt.replace('{{DOMAIN_RESULTS}}', JSON.stringify(results.domains, null, 2));
+        const overallAssessment = await client.generateJSON({ user: overallPrompt, system: AGREE_II_PROMPT_PACK.prompts.system_prompt, validator: validators.overallAssessment, signal, });
+        setResults(prev => ({ ...prev, overall: overallAssessment }));
+        setCurrentStep(4);
+    });
+
+    const downloadResults = () => {
+        const blob = new Blob([JSON.stringify({ metadata: AGREE_II_PROMPT_PACK.metadata, assessment_results: results, model_used: selectedLlm, assessment_date: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agree-ii-assessment-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setApiKeys(prev => ({ ...prev, [name as Vendor]: value }));
+    };
 
     // --- UI Components ---
-    const StepIndicator = ({ step, index, isActive, isCompleted }: { step: { name: string, icon: JSX.Element }, index: number, isActive: boolean, isCompleted: boolean }) => ( /* ... JSX content is correct ... */ );
-    const ApiKeyManager = () => ( /* ... JSX content is correct ... */ );
+    const StepIndicator = ({ step, index, isActive, isCompleted }: { step: { name: string, icon: JSX.Element }, index: number, isActive: boolean, isCompleted: boolean }) => (
+        <div className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}>
+            <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300 ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isActive ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 text-gray-400 bg-white'}`}>
+                {step.icon}
+            </div>
+            <span className={`ml-3 text-sm font-medium hidden sm:inline-block ${isCompleted || isActive ? 'text-gray-900' : 'text-gray-500'}`}>{step.name}</span>
+            {index < steps.length - 1 && (<div className={`flex-1 h-0.5 ml-4 transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`} />)}
+        </div>
+    );
+    
+    const ApiKeyManager = () => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-6 bg-gray-50 rounded-lg border">
+            <div>
+                <h2 className="text-lg font-semibold text-gray-800 mb-2 flex items-center">{ICONS.brain} <span className="ml-2">Select Language Model</span></h2>
+                <p className="text-sm text-gray-600 mb-4">Choose the LLM to perform the assessment. Ensure you provide the corresponding API key.</p>
+                <select value={selectedLlm} onChange={(e) => setSelectedLlm(e.target.value as Vendor)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="gemini">Google Gemini 2.5 Flash</option>
+                    <option value="openai">OpenAI GPT 4.1 </option>
+                    <option value="anthropic">Anthropic Claude Sonnet 4</option>
+                </select>
+            </div>
+            <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">API Keys</h3>
+                <p className="text-sm text-gray-600 mb-4">Your keys are stored only in your browser for this session.</p>
+                <div className="space-y-3">
+                    <input type="password" name="gemini" placeholder="Google AI Studio Key" value={apiKeys.gemini} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'gemini' ? 'border-blue-500' : 'border-gray-300'}`} />
+                    <input type="password" name="openai" placeholder="OpenAI API Key" value={apiKeys.openai} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'openai' ? 'border-blue-500' : 'border-gray-300'}`} />
+                    <input type="password" name="anthropic" placeholder="Anthropic API Key" value={apiKeys.anthropic} onChange={handleApiKeyChange} className={`w-full p-2 border rounded-md ${selectedLlm === 'anthropic' ? 'border-blue-500' : 'border-gray-300'}`} />
+                </div>
+            </div>
+        </div>
+    );
 
-    // CORRECTED: Restored full content for all steps to fix the syntax error.
     const renderStepContent = () => {
         const totalChars = guidelinePages.reduce((acc, p) => acc + p.text.length, 0);
         const areLibrariesReady = isPdfJsReady && isMiniSearchReady;
