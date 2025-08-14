@@ -1,3 +1,4 @@
+// /api/anthropic.ts - Version that accepts user-provided API key
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(
@@ -10,13 +11,13 @@ export default async function handler(
   }
 
   try {
-    const { model, system, user, max_tokens, temperature, top_p } = req.body;
+    const { model, system, user, max_tokens, temperature, top_p, apiKey } = req.body;
 
-    // Get the Anthropic API key from environment variables
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    // Use provided API key or fall back to environment variable
+    const ANTHROPIC_API_KEY = apiKey || process.env.ANTHROPIC_API_KEY;
     
     if (!ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'Anthropic API key not configured' });
+      return res.status(400).json({ error: 'No API key provided' });
     }
 
     // Make the request to Anthropic's API
@@ -28,7 +29,7 @@ export default async function handler(
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: model || 'claude-sonnet-4-20250514', // Default to latest Sonnet
+        model: model || 'claude-3-5-sonnet-20241022',
         messages: [
           { role: 'user', content: user }
         ],
@@ -59,3 +60,4 @@ export default async function handler(
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+}
