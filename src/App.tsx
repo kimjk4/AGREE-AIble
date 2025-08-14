@@ -233,22 +233,24 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                         requestBody = { model, messages, temperature, top_p, ...(opts.isJsonMode ? { response_format: { type: "json_object" } } : {}), };
                     }
                     break;
-                case "anthropic":
-                    apiUrl = "/api/anthropic";
-                    headers = { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", };
-                    requestBody = { model: "claude-sonnet-4-20250514", max_tokens: 4096, messages: [{ role: "user", content: opts.user }], temperature, top_p, };
-                    if (opts.system) { requestBody.system = opts.system; }
-                    break;
-                default:
-                    throw new Error(`Unsupported vendor: ${vendor}`);
-
-        const response = await fetch(apiUrl, {
-    method: "POST", // Critical: must be POST
-    headers: headers,
-    body: JSON.stringify(requestBody)
-});
-
+            case "anthropic": {
+              // ***** CHANGED: call our server route, not Anthropic directly *****
+              apiUrl = "/api/anthropic";
+              headers = { "Content-Type": "application/json" };
+              requestBody = {
+                model: "claude-sonnet-4-20250514",
+                system: opts.system,
+                user: opts.user,
+                max_tokens: 4096,
+                temperature,
+                top_p,
+              };
+              break;
             }
+            default:
+              throw new Error(`Unsupported vendor: ${vendor}`);
+          }
+    
             const response = await fetch(apiUrl, { method: "POST", headers, body: JSON.stringify(requestBody), signal: opts.signal, });
             if (!response.ok) { const errBody = await response.text(); throw new Error(`API request failed: ${response.status} - ${errBody}`); }
             const data = await response.json();
