@@ -1,8 +1,8 @@
 // /api/anthropic.js
-// Using plain JavaScript for better compatibility
+// This API route requires users to provide their own Anthropic API key
 
 export default async function handler(req, res) {
-  // Enable CORS if needed
+  // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -18,8 +18,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Received request body:', JSON.stringify(req.body).substring(0, 200));
-    
     const { model, system, user, max_tokens, temperature, top_p, apiKey } = req.body;
 
     // Validate required fields
@@ -27,13 +25,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required field: user' });
     }
 
-    // Get API key from request or environment
-    const ANTHROPIC_API_KEY = apiKey || process.env.ANTHROPIC_API_KEY;
-    
-    if (!ANTHROPIC_API_KEY) {
-      console.error('No API key available');
+    // API key is required from the user
+    if (!apiKey) {
       return res.status(400).json({ 
-        error: 'No API key provided. Either pass apiKey in request or set ANTHROPIC_API_KEY env variable' 
+        error: 'Anthropic API key is required. Please provide your API key in the interface.' 
       });
     }
 
@@ -53,59 +48,49 @@ export default async function handler(req, res) {
       anthropicRequest.system = system;
     }
 
-    console.log('Calling Anthropic API with model:', anthropicRequest.model);
-
     // Make the request to Anthropic's API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,  // Use the user-provided API key
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(anthropicRequest)
     });
 
-    const responseText = await response.text();
-    console.log('Anthropic response status:', response.status);
-
     if (!response.ok) {
-      console.error('Anthropic API error:', responseText);
+      const errorText = await response.text();
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(errorText);
+      } catch {
+        errorDetails = errorText;
+      }
+      
       return res.status(response.status).json({ 
         error: `Anthropic API error: ${response.status}`,
-        details: responseText 
+        details: errorDetails
       });
     }
 
-    // Parse and return the response
-    try {
-      const data = JSON.parse(responseText);
-      return res.status(200).json(data);
-    } catch (parseError) {
-      console.error('Failed to parse Anthropic response:', parseError);
-      return res.status(500).json({ 
-        error: 'Failed to parse Anthropic response',
-        details: responseText.substring(0, 500)
-      });
-    }
+    const data = await response.json();
+    return res.status(200).json(data);
 
   } catch (error) {
-    console.error('Unexpected error in API route:', error);
+    console.error('Error in Anthropic API route:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
-      details: error.message || 'Unknown error',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message || 'Unknown error'
     });
   }
 }
 
-// Export config to increase timeout and body size limit
+// Configuration for Vercel
 export const config = {
   api: {
     bodyParser: {
       sizeLimit: '10mb',
     },
-    responseLimit: '10mb',
   },
-  maxDuration: 30, // Maximum function duration in seconds
 };
