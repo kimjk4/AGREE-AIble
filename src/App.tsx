@@ -2,7 +2,7 @@ import React from 'react';
 
 // --- TYPE DEFINITIONS ---
 type DomainId = 1 | 2 | 3 | 4 | 5 | 6;
-type Vendor = "openai" | "anthropic" | "gemini";
+type Vendor = "openai" | "anthropic" | "gemini-flash" | "gemini-pro";
 
 interface MiniSearch<T = any> {
     new (options: any): MiniSearch<T>;
@@ -212,7 +212,14 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
             let requestBody: any = {};
             let headers: Record<string, string> = {};
             switch (vendor) {
-                case "gemini":
+                case "gemini-flash":
+                case "gemini-pro":
+                    // Determine the model string based on the selected vendor
+                    const modelName = vendor === 'gemini-pro' 
+                        ? 'gemini-2.5-pro-preview-05-20' 
+                        : 'gemini-2.5-flash-preview-05-20';
+
+                    
                     apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                     headers = { "Content-Type": "application/json" };
                     requestBody = {
@@ -493,6 +500,7 @@ const AgreeIIWorkflow: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-4">Choose the LLM to perform the assessment. Ensure you provide the corresponding API key.</p>
                 <select value={selectedLlm} onChange={(e) => setSelectedLlm(e.target.value as Vendor)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="gemini">Google Gemini 2.5 Flash</option>
+                    <option value="gemini-pro">Google Gemini 2.5 Pro</option>
                     <option value="openai">OpenAI GPT 4.1 </option>
                     <option value="anthropic">Anthropic Claude Sonnet 4</option>
                 </select>
