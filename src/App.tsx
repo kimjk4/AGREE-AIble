@@ -243,7 +243,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                   }
                   
                   requestBody = {
-                    model: "claude-3-5-sonnet-20241022", // Use correct model name
+                    model: "claude-sonnet-4-20250514", // Use correct model name
                     system: opts.system || "",
                     user: opts.user,
                     max_tokens: 4096,
