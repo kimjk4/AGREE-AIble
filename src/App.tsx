@@ -234,7 +234,7 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     }
                     break;
                 case "anthropic":
-                    apiUrl = "/api/anthropic";
+                    apiUrl = "https://api.anthropic.com/v1/messages";
                     headers = { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", };
                     requestBody = { model: "claude-sonnet-4-20250514", max_tokens: 4096, messages: [{ role: "user", content: opts.user }], temperature, top_p, };
                     if (opts.system) { requestBody.system = opts.system; }
