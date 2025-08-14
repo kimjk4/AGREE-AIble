@@ -317,7 +317,7 @@ const AgreeIIWorkflow: React.FC = () => {
     const [isPdfJsReady, setIsPdfJsReady] = React.useState<boolean>(false);
     const [isMiniSearchReady, setIsMiniSearchReady] = React.useState<boolean>(false);
     const [abortController, setAbortController] = React.useState<AbortController | null>(null);
-    const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini');
+    const [selectedLlm, setSelectedLlm] = React.useState<Vendor>('gemini-flash');
     const [apiKeys, setApiKeys] = React.useState<Record<Vendor, string>>({ gemini: '', openai: '', anthropic: '' });
 
     const steps = [
