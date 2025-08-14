@@ -234,19 +234,19 @@ function getClient(vendor: Vendor, apiKey: string): ModelClient {
                     }
                     break;
             case "anthropic": {
-              // ***** CHANGED: call our server route, not Anthropic directly *****
-              apiUrl = "/api/anthropic";
-              headers = { "Content-Type": "application/json" };
-              requestBody = {
-                model: "claude-sonnet-4-20250514",
-                system: opts.system,
-                user: opts.user,
-                max_tokens: 4096,
-                temperature,
-                top_p,
-              };
-              break;
-            }
+                  apiUrl = "/api/anthropic";
+                  headers = { "Content-Type": "application/json" };
+                  requestBody = {
+                    model: "claude-3-5-sonnet-20241022",
+                    system: opts.system,
+                    user: opts.user,
+                    max_tokens: 4096,
+                    temperature,
+                    top_p,
+                    apiKey: apiKeys.anthropic // Pass the user-provided API key
+                  };
+                  break;
+                }
             default:
               throw new Error(`Unsupported vendor: ${vendor}`);
           }
